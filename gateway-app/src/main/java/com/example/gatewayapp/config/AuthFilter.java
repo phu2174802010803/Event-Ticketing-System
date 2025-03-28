@@ -3,6 +3,7 @@ package com.example.gatewayapp.config;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -14,6 +15,9 @@ public class AuthFilter extends AbstractGatewayFilterFactory<AuthFilter.Config> 
     @Autowired
     private RestTemplate restTemplate;
 
+    @Autowired
+    private RedisTemplate<String, String> redisTemplate; // Thêm RedisTemplate
+
     public AuthFilter() {
         super(Config.class);
     }
@@ -22,11 +26,12 @@ public class AuthFilter extends AbstractGatewayFilterFactory<AuthFilter.Config> 
     public GatewayFilter apply(Config config) {
         return (exchange, chain) -> {
             String path = exchange.getRequest().getURI().getPath();
-            if (path.startsWith("/api/register") || 
-                path.startsWith("/api/auth/login") || 
-                path.startsWith("/api/auth/forgot-password") || 
-                path.startsWith("/api/auth/verify-code") || 
-                path.startsWith("/api/auth/reset-password")) {
+            if (path.startsWith("/api/register") ||
+                    path.startsWith("/api/auth/login") ||
+                    path.startsWith("/api/auth/logout") || // Thêm /logout vào danh sách bỏ qua
+                    path.startsWith("/api/auth/forgot-password") ||
+                    path.startsWith("/api/auth/verify-code") ||
+                    path.startsWith("/api/auth/reset-password")) {
                 return chain.filter(exchange); // Bỏ qua xác thực
             }
 
@@ -38,6 +43,11 @@ public class AuthFilter extends AbstractGatewayFilterFactory<AuthFilter.Config> 
             String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
                 String token = authHeader.substring(7);
+                // Kiểm tra blacklist trong Redis
+                if (redisTemplate.hasKey("blacklist:" + token)) {
+                    exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                    return exchange.getResponse().setComplete();
+                }
                 try {
                     String role = restTemplate.getForObject("http://localhost:8081/api/auth/validate?token=" + token, String.class);
                     if (role == null) {
