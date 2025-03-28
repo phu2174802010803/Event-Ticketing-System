@@ -6,6 +6,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -25,6 +26,9 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     @Autowired
     private JwtUtil jwtUtil;
 
+    @Autowired
+    private RedisTemplate<String, String> redisTemplate;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
@@ -32,6 +36,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
         if (path.startsWith("/api/register") ||
                 path.startsWith("/api/organizer/register") ||
                 path.startsWith("/api/auth/login") ||
+                path.startsWith("/api/auth/logout") ||
                 path.startsWith("/api/auth/forgot-password") ||
                 path.startsWith("/api/auth/verify-code") ||
                 path.startsWith("/api/auth/reset-password") ||
@@ -46,6 +51,11 @@ public class JwtRequestFilter extends OncePerRequestFilter {
 
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
             jwt = authorizationHeader.substring(7);
+            // Kiểm tra blacklist
+            if (redisTemplate.hasKey("blacklist:" + jwt)) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
+            }
             username = jwtUtil.extractUsername(jwt);
         }
 

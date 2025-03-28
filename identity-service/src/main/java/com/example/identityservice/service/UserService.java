@@ -8,6 +8,7 @@ import com.example.identityservice.model.User;
 import com.example.identityservice.repository.PasswordResetTokenRepository;
 import com.example.identityservice.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class UserService {
@@ -29,6 +31,9 @@ public class UserService {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private RedisTemplate<String, String> redisTemplate; // Thêm RedisTemplate
 
     @Transactional
     public User registerUser(UserRegistrationDto registrationDto) {
@@ -60,9 +65,36 @@ public class UserService {
         user.setPhone(registrationDto.getPhone());
         user.setAddress(registrationDto.getAddress());
         user.setActive(true);
-        user.setApproved(role == Role.USER); // USER không cần phê duyệt, ORGANIZER cần
 
         return userRepository.save(user);
+    }
+
+    // Phương thức tìm kiếm với caching
+    public Optional<User> findByUsername(String username) {
+        String key = "user:username:" + username;
+        String userId = redisTemplate.opsForValue().get(key);
+
+        if (userId != null) {
+            Optional<User> cachedUser = userRepository.findById(Integer.parseInt(userId));
+            if (cachedUser.isPresent()) {
+                return cachedUser;
+            }
+        }
+
+        Optional<User> user = userRepository.findByUsername(username);
+        if (user.isPresent()) {
+            redisTemplate.opsForValue().set(key, user.get().getUserId().toString(), 10, TimeUnit.MINUTES);
+        }
+        return user;
+    }
+
+    // Cập nhật thông tin người dùng và xóa cache
+    @Transactional
+    public User save(User user) {
+        User savedUser = userRepository.save(user);
+        String key = "user:username:" + user.getUsername();
+        redisTemplate.delete(key); // Xóa cache khi thông tin thay đổi
+        return savedUser;
     }
 
     @Transactional
@@ -93,17 +125,11 @@ public class UserService {
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
         passwordResetTokenRepository.deleteByUserId(user.getUserId());
+        String key = "user:username:" + user.getUsername();
+        redisTemplate.delete(key); // Xóa cache khi mật khẩu thay đổi
     }
 
     public Optional<User> findByEmail(String email) {
         return userRepository.findByEmail(email);
-    }
-
-    public Optional<User> findByUsername(String username) {
-        return userRepository.findByUsername(username);
-    }
-
-    public User save(User user) {
-        return userRepository.save(user);
     }
 }

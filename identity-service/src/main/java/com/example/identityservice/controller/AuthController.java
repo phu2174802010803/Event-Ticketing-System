@@ -23,6 +23,7 @@ import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -31,6 +32,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/api")
@@ -58,6 +61,9 @@ public class AuthController {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private RedisTemplate<String, String> redisTemplate; // Thêm RedisTemplate
+
     @PostMapping("/register")
     public ResponseEntity<ResponseDto> registerUser(@Valid @RequestBody UserRegistrationDto registrationDto) {
         registrationDto.setRole("USER"); // Mặc định là USER cho App
@@ -71,7 +77,7 @@ public class AuthController {
         registrationDto.setRole("ORGANIZER"); // Mặc định là ORGANIZER cho Web
         User user = userService.registerUser(registrationDto);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new ResponseDto(user.getUserId(), "Đăng ký Organizer thành công, chờ phê duyệt"));
+                .body(new ResponseDto(user.getUserId(), "Đăng ký Organizer thành công"));
     }
 
     @PostMapping("/auth/login")
@@ -95,6 +101,19 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(new ErrorResponse("Tài khoản chưa được phê duyệt"));
         }
+    }
+
+    @PostMapping("/auth/logout")
+    public ResponseEntity<?> logout(@RequestHeader("Authorization") String authorizationHeader) {
+        if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
+            String token = authorizationHeader.substring(7);
+            long expiry = jwtUtil.extractExpiration(token).getTime() - System.currentTimeMillis();
+            if (expiry > 0) {
+                redisTemplate.opsForValue().set("blacklist:" + token, "revoked", expiry, TimeUnit.MILLISECONDS);
+            }
+            return ResponseEntity.ok(new ResponseDto(null, "Đăng xuất thành công"));
+        }
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("Token không hợp lệ"));
     }
 
     @GetMapping("/auth/validate")

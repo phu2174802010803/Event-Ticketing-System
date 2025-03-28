@@ -31,10 +31,6 @@ public class UserDetailsServiceImpl implements UserDetailsService {
             throw new AccountNotActivatedException("Tài khoản chưa được kích hoạt");
         }
 
-        if (!user.isApproved() && user.getRole() == Role.ORGANIZER) {
-            throw new AccountNotApprovedException("Tài khoản chưa được phê duyệt");
-        }
-
         List<GrantedAuthority> authorities = new ArrayList<>();
         authorities.add(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
 

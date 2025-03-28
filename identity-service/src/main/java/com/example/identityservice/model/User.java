@@ -27,9 +27,6 @@ public class User {
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
-    @Column(name = "is_approved", nullable = false)
-    private boolean isApproved = false;
-
     @Column(nullable = false, unique = true)
     private String email;
 
