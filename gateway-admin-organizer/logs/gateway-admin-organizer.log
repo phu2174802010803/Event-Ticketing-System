@@ -1,0 +1,34 @@
+2025-03-27T19:16:37.264+07:00  INFO 32696 --- [gateway-admin-organizer] [main] c.e.g.GatewayAdminOrganizerApplication   : Starting GatewayAdminOrganizerApplication using Java 17.0.14 with PID 32696 (D:\Event Ticketing System\gateway-admin-organizer\target\classes started by Admin in D:\Event Ticketing System\gateway-admin-organizer)
+2025-03-27T19:16:37.266+07:00 DEBUG 32696 --- [gateway-admin-organizer] [main] c.e.g.GatewayAdminOrganizerApplication   : Running with Spring Boot v3.3.2, Spring v6.1.11
+2025-03-27T19:16:37.266+07:00  INFO 32696 --- [gateway-admin-organizer] [main] c.e.g.GatewayAdminOrganizerApplication   : No active profile set, falling back to 1 default profile: "default"
+2025-03-27T19:16:38.220+07:00  INFO 32696 --- [gateway-admin-organizer] [main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2025-03-27T19:16:38.223+07:00  INFO 32696 --- [gateway-admin-organizer] [main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-03-27T19:16:38.264+07:00  INFO 32696 --- [gateway-admin-organizer] [main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 14 ms. Found 0 Redis repository interfaces.
+2025-03-27T19:16:38.620+07:00  INFO 32696 --- [gateway-admin-organizer] [main] o.s.cloud.context.scope.GenericScope     : BeanFactory id=48bf1d09-4088-3346-93ea-55f8ab04920b
+2025-03-27T19:16:38.672+07:00  WARN 32696 --- [gateway-admin-organizer] [main] trationDelegate$BeanPostProcessorChecker : Bean 'org.springframework.cloud.client.loadbalancer.LoadBalancerAutoConfiguration$DeferringLoadBalancerInterceptorConfig' of type [org.springframework.cloud.client.loadbalancer.LoadBalancerAutoConfiguration$DeferringLoadBalancerInterceptorConfig] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). The currently created BeanPostProcessor [lbRestClientPostProcessor] is declared through a non-static factory method on that class; consider declaring it as static instead.
+2025-03-27T19:16:38.674+07:00  WARN 32696 --- [gateway-admin-organizer] [main] trationDelegate$BeanPostProcessorChecker : Bean 'deferringLoadBalancerInterceptor' of type [org.springframework.cloud.client.loadbalancer.DeferringLoadBalancerInterceptor] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected into a currently created BeanPostProcessor [lbRestClientPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies.
+2025-03-27T19:16:38.675+07:00  WARN 32696 --- [gateway-admin-organizer] [main] trationDelegate$BeanPostProcessorChecker : Bean 'org.springframework.cloud.client.loadbalancer.reactive.LoadBalancerBeanPostProcessorAutoConfiguration' of type [org.springframework.cloud.client.loadbalancer.reactive.LoadBalancerBeanPostProcessorAutoConfiguration] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). The currently created BeanPostProcessor [loadBalancerWebClientBuilderBeanPostProcessor] is declared through a non-static factory method on that class; consider declaring it as static instead.
+2025-03-27T19:16:38.678+07:00  WARN 32696 --- [gateway-admin-organizer] [main] trationDelegate$BeanPostProcessorChecker : Bean 'org.springframework.cloud.client.loadbalancer.reactive.LoadBalancerBeanPostProcessorAutoConfiguration$ReactorDeferringLoadBalancerFilterConfig' of type [org.springframework.cloud.client.loadbalancer.reactive.LoadBalancerBeanPostProcessorAutoConfiguration$ReactorDeferringLoadBalancerFilterConfig] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected into a currently created BeanPostProcessor [loadBalancerWebClientBuilderBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies.
+2025-03-27T19:16:38.678+07:00  WARN 32696 --- [gateway-admin-organizer] [main] trationDelegate$BeanPostProcessorChecker : Bean 'reactorDeferringLoadBalancerExchangeFilterFunction' of type [org.springframework.cloud.client.loadbalancer.reactive.DeferringLoadBalancerExchangeFilterFunction] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected into a currently created BeanPostProcessor [loadBalancerWebClientBuilderBeanPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies.
+2025-03-27T19:16:38.846+07:00  WARN 32696 --- [gateway-admin-organizer] [main] onfigReactiveWebServerApplicationContext : Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'authFilter': Unsatisfied dependency expressed through field 'webClient': No qualifying bean of type 'org.springframework.web.reactive.function.client.WebClient' available: expected at least 1 bean which qualifies as autowire candidate. Dependency annotations: {@org.springframework.beans.factory.annotation.Autowired(required=true)}
+2025-03-27T19:16:38.867+07:00  INFO 32696 --- [gateway-admin-organizer] [main] .s.b.a.l.ConditionEvaluationReportLogger : 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2025-03-27T19:16:38.883+07:00 ERROR 32696 --- [gateway-admin-organizer] [main] o.s.b.d.LoggingFailureAnalysisReporter   : 
+
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+Field webClient in com.example.gatewayadminorganizer.config.AuthFilter required a bean of type 'org.springframework.web.reactive.function.client.WebClient' that could not be found.
+
+The injection point has the following annotations:
+	- @org.springframework.beans.factory.annotation.Autowired(required=true)
+
+
+Action:
+
+Consider defining a bean of type 'org.springframework.web.reactive.function.client.WebClient' in your configuration.
+
