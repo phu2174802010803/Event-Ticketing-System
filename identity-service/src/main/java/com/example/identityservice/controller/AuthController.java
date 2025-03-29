@@ -9,7 +9,7 @@ import com.example.identityservice.dto.ResponseDto;
 import com.example.identityservice.dto.UserRegistrationDto;
 import com.example.identityservice.dto.VerifyCodeRequest;
 import com.example.identityservice.exception.AccountNotActivatedException;
-import com.example.identityservice.exception.AccountNotApprovedException;
+import com.example.identityservice.exception.RegistrationException;
 import com.example.identityservice.model.PasswordResetToken;
 import com.example.identityservice.model.User;
 import com.example.identityservice.repository.PasswordResetTokenRepository;
@@ -65,11 +65,14 @@ public class AuthController {
     private RedisTemplate<String, String> redisTemplate; // Thêm RedisTemplate
 
     @PostMapping("/register")
-    public ResponseEntity<ResponseDto> registerUser(@Valid @RequestBody UserRegistrationDto registrationDto) {
-        registrationDto.setRole("USER"); // Mặc định là USER cho App
-        User user = userService.registerUser(registrationDto);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new ResponseDto(user.getUserId(), "Đăng ký người dùng thành công"));
+    public ResponseEntity<?> registerUser(@Valid @RequestBody UserRegistrationDto registrationDto) {
+        try {
+            registrationDto.setRole("USER"); // Mặc định là USER cho App
+            User user = userService.registerUser(registrationDto);
+            return ResponseEntity.ok(new ResponseDto(user.getUserId(), "Đăng ký thành công"));
+        } catch (RegistrationException e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+        }
     }
 
     @PostMapping("/organizer/register")
@@ -82,24 +85,29 @@ public class AuthController {
 
     @PostMapping("/auth/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginDto loginDto) {
-        logger.info("Nhận yêu cầu đăng nhập cho username: {}", loginDto.getUsername());
+        logger.info("Nhận yêu cầu đăng nhập cho login: {}", loginDto.getLogin());
         try {
+            // Tìm người dùng bằng username hoặc email
+            User user = userRepository.findByUsername(loginDto.getLogin())
+                    .or(() -> userRepository.findByEmail(loginDto.getLogin()))
+                    .orElseThrow(() -> new BadCredentialsException("Không tìm thấy người dùng với thông tin đăng nhập: " + loginDto.getLogin()));
+
+            final UserDetails userDetails = userDetailsService.loadUserByUsername(user.getUsername());
+            // Xác thực bằng username thực sự của người dùng
             authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(loginDto.getUsername(), loginDto.getPassword())
+                    new UsernamePasswordAuthenticationToken(user.getUsername(), loginDto.getPassword())
             );
-            final UserDetails userDetails = userDetailsService.loadUserByUsername(loginDto.getUsername());
+
+            // Tạo JWT token
             final String jwt = jwtUtil.generateToken(userDetails.getUsername());
-            return ResponseEntity.ok(new AuthenticationResponse(jwt, "Đăng nhập thành công", loginDto.getUsername()));
+            return ResponseEntity.ok(new AuthenticationResponse(jwt, "Đăng nhập thành công", user.getUsername()));
         } catch (BadCredentialsException e) {
-            logger.error("Sai thông tin đăng nhập: {}", loginDto.getUsername(), e);
+            logger.error("Sai thông tin đăng nhập: {}", loginDto.getLogin(), e);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new ErrorResponse("Sai tên đăng nhập hoặc mật khẩu"));
+                    .body(new ErrorResponse("Sai tên đăng nhập/email hoặc mật khẩu"));
         } catch (AccountNotActivatedException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(new ErrorResponse("Tài khoản chưa được kích hoạt"));
-        } catch (AccountNotApprovedException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(new ErrorResponse("Tài khoản chưa được phê duyệt"));
         }
     }
 

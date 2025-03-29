@@ -32,21 +32,33 @@ public class UserController {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         User user = userService.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("Người dùng không tồn tại"));
-        // Cập nhật chỉ các trường được gửi trong request
-        if (updateDto.getEmail() != null) {
+
+        boolean hasChanges = false;
+        if (updateDto.getEmail() != null && !updateDto.getEmail().equals(user.getEmail())) {
+            if (userService.findByEmail(updateDto.getEmail()).isPresent()) {
+                throw new IllegalArgumentException("Email đã tồn tại");
+            }
             user.setEmail(updateDto.getEmail());
+            hasChanges = true;
         }
-        if (updateDto.getFullName() != null) {
+        if (updateDto.getFullName() != null && !updateDto.getFullName().equals(user.getFullName())) {
             user.setFullName(updateDto.getFullName());
+            hasChanges = true;
         }
-        if (updateDto.getPhone() != null) {
+        if (updateDto.getPhone() != null && !updateDto.getPhone().equals(user.getPhone())) {
             user.setPhone(updateDto.getPhone());
+            hasChanges = true;
         }
-        if (updateDto.getAddress() != null) {
+        if (updateDto.getAddress() != null && !updateDto.getAddress().equals(user.getAddress())) {
             user.setAddress(updateDto.getAddress());
+            hasChanges = true;
         }
+
+        if (!hasChanges) {
+            return ResponseEntity.ok("Không có thay đổi để cập nhật");
+        }
+
         user.setUpdatedAt(LocalDateTime.now());
-        
         userService.save(user);
         return ResponseEntity.ok("Cập nhật thông tin thành công");
     }
