@@ -33,6 +33,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
 
 @RestController
@@ -156,16 +157,25 @@ public class AuthController {
 
     @PostMapping("/auth/verify-code")
     public ResponseEntity<?> verifyCode(@Valid @RequestBody VerifyCodeRequest request) {
-        String result = userService.validatePasswordResetToken(request.getToken());
-        if ("valid".equals(result)) {
-            return ResponseEntity.ok("Mã xác nhận hợp lệ");
-        } else if ("expired".equals(result)) {
-            return ResponseEntity.badRequest()
-                    .body(new ErrorResponse("Mã xác nhận đã hết hạn"));
-        } else {
-            return ResponseEntity.badRequest()
-                    .body(new ErrorResponse("Mã xác nhận không hợp lệ"));
+        // Tìm user theo email
+        User user = userService.findByEmail(request.getEmail())
+                .orElseThrow(() -> new IllegalArgumentException("Email không tồn tại"));
+
+        // Tìm token theo mã token
+        PasswordResetToken token = passwordResetTokenRepository.findByToken(request.getToken())
+                .orElseThrow(() -> new IllegalArgumentException("Mã xác nhận không tồn tại"));
+
+        // Kiểm tra token có thuộc về user không
+        if (!token.getUserId().equals(user.getUserId())) {
+            return ResponseEntity.badRequest().body("Mã xác nhận không hợp lệ cho email này");
         }
+
+        // Kiểm tra token còn hạn
+        if (token.getExpiryDate().isBefore(LocalDateTime.now())) {
+            return ResponseEntity.badRequest().body("Mã xác nhận đã hết hạn");
+        }
+
+        return ResponseEntity.ok("Mã xác nhận hợp lệ");
     }
 
     @PostMapping("/auth/reset-password")
