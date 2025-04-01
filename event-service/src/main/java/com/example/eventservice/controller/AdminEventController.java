@@ -17,14 +17,8 @@ public class AdminEventController {
     private EventService eventService;
 
     @PostMapping("/events")
-    public ResponseEntity<EventResponseDto> createEvent(
-            @Valid @RequestBody EventRequestDto requestDto,
-            @RequestHeader("Authorization") String authorizationHeader) {
-        if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
-            throw new IllegalArgumentException("Token không hợp lệ");
-        }
-        String token = authorizationHeader.substring(7);
-        Event event = eventService.createEventForAdmin(requestDto, token);
+    public ResponseEntity<EventResponseDto> createEvent(@Valid @RequestBody EventRequestDto requestDto) {
+        Event event = eventService.createEventForAdmin(requestDto);
         return ResponseEntity.ok(new EventResponseDto(event.getEventId(), "Tạo sự kiện thành công"));
     }
 }
