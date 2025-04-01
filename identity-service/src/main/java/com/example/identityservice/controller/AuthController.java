@@ -34,7 +34,9 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api")
@@ -63,7 +65,7 @@ public class AuthController {
     private UserRepository userRepository;
 
     @Autowired
-    private RedisTemplate<String, String> redisTemplate; // Thêm RedisTemplate
+    private RedisTemplate<String, String> redisTemplate;
 
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody UserRegistrationDto registrationDto) {
@@ -88,19 +90,21 @@ public class AuthController {
     public ResponseEntity<?> login(@Valid @RequestBody LoginDto loginDto) {
         logger.info("Nhận yêu cầu đăng nhập cho login: {}", loginDto.getLogin());
         try {
-            // Tìm người dùng bằng username hoặc email
             User user = userRepository.findByUsername(loginDto.getLogin())
                     .or(() -> userRepository.findByEmail(loginDto.getLogin()))
                     .orElseThrow(() -> new BadCredentialsException("Không tìm thấy người dùng với thông tin đăng nhập: " + loginDto.getLogin()));
 
             final UserDetails userDetails = userDetailsService.loadUserByUsername(user.getUsername());
-            // Xác thực bằng username thực sự của người dùng
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(user.getUsername(), loginDto.getPassword())
             );
 
-            // Tạo JWT token
-            final String jwt = jwtUtil.generateToken(userDetails.getUsername());
+            List<String> roles = userDetails.getAuthorities().stream()
+                    .map(authority -> authority.getAuthority().replace("ROLE_", ""))
+                    .collect(Collectors.toList());
+
+            // Tạo token với cả userId và username
+            final String jwt = jwtUtil.generateToken(user.getUserId(), user.getUsername(), roles);
             return ResponseEntity.ok(new AuthenticationResponse(jwt, "Đăng nhập thành công", user.getUsername()));
         } catch (BadCredentialsException e) {
             logger.error("Sai thông tin đăng nhập: {}", loginDto.getLogin(), e);
@@ -131,7 +135,10 @@ public class AuthController {
             String username = jwtUtil.extractUsername(token);
             UserDetails userDetails = userDetailsService.loadUserByUsername(username);
             if (jwtUtil.validateToken(token, userDetails)) {
-                return ResponseEntity.ok(userDetails.getAuthorities().iterator().next().getAuthority());
+                User user = userRepository.findByUsername(username)
+                        .orElseThrow(() -> new IllegalArgumentException("User not found"));
+                String userInfo = user.getUserId() + ":" + user.getRole().toString();
+                return ResponseEntity.ok(userInfo); // Trả về "user_id:role", ví dụ "1:USER"
             } else {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse("Invalid token"));
             }
@@ -157,25 +164,20 @@ public class AuthController {
 
     @PostMapping("/auth/verify-code")
     public ResponseEntity<?> verifyCode(@Valid @RequestBody VerifyCodeRequest request) {
-        // Tìm user theo email
         User user = userService.findByEmail(request.getEmail())
                 .orElseThrow(() -> new IllegalArgumentException("Email không tồn tại"));
-
-        // Tìm token theo mã token
         PasswordResetToken token = passwordResetTokenRepository.findByToken(request.getToken())
                 .orElseThrow(() -> new IllegalArgumentException("Mã xác nhận không tồn tại"));
 
-        // Kiểm tra token có thuộc về user không
         if (!token.getUserId().equals(user.getUserId())) {
-            return ResponseEntity.badRequest().body("Mã xác nhận không hợp lệ cho email này");
+            return ResponseEntity.badRequest().body(new ErrorResponse("Mã xác nhận không hợp lệ cho email này"));
         }
 
-        // Kiểm tra token còn hạn
         if (token.getExpiryDate().isBefore(LocalDateTime.now())) {
-            return ResponseEntity.badRequest().body("Mã xác nhận đã hết hạn");
+            return ResponseEntity.badRequest().body(new ErrorResponse("Mã xác nhận đã hết hạn"));
         }
 
-        return ResponseEntity.ok("Mã xác nhận hợp lệ");
+        return ResponseEntity.ok(new ResponseDto(user.getUserId(), "Mã xác nhận hợp lệ"));
     }
 
     @PostMapping("/auth/reset-password")
