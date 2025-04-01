@@ -9,6 +9,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.concurrent.TimeUnit;
+
 @Component
 public class AuthFilter extends AbstractGatewayFilterFactory<AuthFilter.Config> {
 
@@ -16,7 +18,7 @@ public class AuthFilter extends AbstractGatewayFilterFactory<AuthFilter.Config> 
     private RestTemplate restTemplate;
 
     @Autowired
-    private RedisTemplate<String, String> redisTemplate; // Thêm RedisTemplate
+    private RedisTemplate<String, String> redisTemplate;
 
     public AuthFilter() {
         super(Config.class);
@@ -28,7 +30,7 @@ public class AuthFilter extends AbstractGatewayFilterFactory<AuthFilter.Config> 
             String path = exchange.getRequest().getURI().getPath();
             if (path.startsWith("/api/organizer/register") ||
                     path.startsWith("/api/auth/login") ||
-                    path.startsWith("/api/auth/logout") || // Thêm /logout vào danh sách bỏ qua
+                    path.startsWith("/api/auth/logout") ||
                     path.startsWith("/api/auth/forgot-password") ||
                     path.startsWith("/api/auth/verify-code") ||
                     path.startsWith("/api/auth/reset-password")) {
@@ -48,16 +50,33 @@ public class AuthFilter extends AbstractGatewayFilterFactory<AuthFilter.Config> 
                     exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
                     return exchange.getResponse().setComplete();
                 }
-                try {
-                    String role = restTemplate.getForObject("http://localhost:8081/api/auth/validate?token=" + token, String.class);
-                    if (role == null || (!role.equals("ROLE_ADMIN") && !role.equals("ROLE_ORGANIZER"))) {
-                        exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
+                // Kiểm tra cache Redis
+                String userInfo = redisTemplate.opsForValue().get("token:" + token);
+                if (userInfo == null) {
+                    // Gọi identity-service để validate
+                    String validateUrl = "http://localhost:8081/api/auth/validate?token=" + token;
+                    String response = restTemplate.getForObject(validateUrl, String.class);
+                    if (response == null) {
+                        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
                         return exchange.getResponse().setComplete();
                     }
-                } catch (Exception e) {
-                    exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                    userInfo = response; // "user_id:role", ví dụ "1:ORGANIZER"
+                    // Lưu vào Redis với TTL 10 phút
+                    redisTemplate.opsForValue().set("token:" + token, userInfo, 10, TimeUnit.MINUTES);
+                }
+                // Kiểm tra vai trò
+                String[] parts = userInfo.split(":");
+                String userId = parts[0];
+                String role = parts[1];
+                if (!role.equals("ADMIN") && !role.equals("ORGANIZER")) {
+                    exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
                     return exchange.getResponse().setComplete();
                 }
+                // Thêm header X-User-Id và X-User-Role
+                exchange.getRequest().mutate()
+                        .header("X-User-Id", userId)
+                        .header("X-User-Role", role)
+                        .build();
             } else {
                 exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
                 return exchange.getResponse().setComplete();

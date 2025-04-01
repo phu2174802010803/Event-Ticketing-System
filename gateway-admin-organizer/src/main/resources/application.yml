@@ -1,7 +1,7 @@
 spring:
   application:
     name: gateway-admin-organizer
-  redis:  # Thêm cấu hình Redis
+  redis:
     host: localhost
     port: 6379
   cloud:
@@ -10,11 +10,15 @@ spring:
         - id: identity-service
           uri: http://localhost:8081
           predicates:
-            - Path=/api/organizer/register, /api/admin/users/**, /api/organizer/**, /api/auth/**
-        - id: event-service
+            - Path=/api/organizer/register, /api/admin/users/**, /api/auth/**
+        - id: event-service-organizer
           uri: http://localhost:8083
           predicates:
-            - Path=/api/admin/events/**, /api/organizer/events/**
+            - Path=/api/organizer/**
+        - id: event-service-admin
+          uri: http://localhost:8083
+          predicates:
+            - Path=/api/admin/**
         - id: ticket-service
           uri: http://localhost:8084
           predicates:
