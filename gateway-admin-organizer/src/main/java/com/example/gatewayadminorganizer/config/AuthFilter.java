@@ -1,6 +1,7 @@
 package com.example.gatewayadminorganizer.config;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -19,6 +20,9 @@ public class AuthFilter extends AbstractGatewayFilterFactory<AuthFilter.Config> 
 
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
+
+    @Value("${identity.service.url}")
+    private String identityServiceUrl;
 
     public AuthFilter() {
         super(Config.class);
@@ -54,7 +58,7 @@ public class AuthFilter extends AbstractGatewayFilterFactory<AuthFilter.Config> 
                 String userInfo = redisTemplate.opsForValue().get("token:" + token);
                 if (userInfo == null) {
                     // Gọi identity-service để validate
-                    String validateUrl = "http://localhost:8081/api/auth/validate?token=" + token;
+                    String validateUrl = identityServiceUrl + "/api/auth/validate?token=" + token;
                     String response = restTemplate.getForObject(validateUrl, String.class);
                     if (response == null) {
                         exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);

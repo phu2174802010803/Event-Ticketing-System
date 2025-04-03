@@ -27,6 +27,9 @@ spring:
         - AuthFilter
 server:
   port: 8085
+identity:
+  service:
+    url: http://localhost:8081
 logging:
   level:
     org.springframework.cloud.gateway: DEBUG
