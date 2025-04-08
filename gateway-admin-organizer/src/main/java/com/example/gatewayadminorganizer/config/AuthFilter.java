@@ -72,6 +72,13 @@ public class AuthFilter extends AbstractGatewayFilterFactory<AuthFilter.Config> 
                 String[] parts = userInfo.split(":");
                 String userId = parts[0];
                 String role = parts[1];
+
+                // Chặn ORGANIZER ngay tại Gateway cho tất cả endpoint /api/admin/**
+                if (path.startsWith("/api/admin/") && role.equals("ORGANIZER")) {
+                    exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
+                    return exchange.getResponse().setComplete();
+                }
+
                 if (!role.equals("ADMIN") && !role.equals("ORGANIZER")) {
                     exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
                     return exchange.getResponse().setComplete();
