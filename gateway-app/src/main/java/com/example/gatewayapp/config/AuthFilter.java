@@ -32,7 +32,8 @@ public class AuthFilter extends AbstractGatewayFilterFactory<AuthFilter.Config> 
     public GatewayFilter apply(Config config) {
         return (exchange, chain) -> {
             String path = exchange.getRequest().getURI().getPath();
-            if (path.startsWith("/api/register") ||
+            if (path.startsWith("/api/events/public") ||
+                    path.startsWith("/api/register") ||
                     path.startsWith("/api/auth/login") ||
                     path.startsWith("/api/auth/logout") ||
                     path.startsWith("/api/auth/forgot-password") ||
