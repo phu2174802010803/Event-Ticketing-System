@@ -28,6 +28,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
+        String requestURI = request.getRequestURI();
+        logger.debug("Request URI: {}", requestURI);
+
+        // Bỏ qua xác thực cho các endpoint công khai
+        if (requestURI.startsWith("/api/events/public")) {
+            logger.debug("Public endpoint accessed, skipping authentication: {}", requestURI);
+            chain.doFilter(request, response);
+            return;
+        }
+
         String userId = request.getHeader("X-User-Id");
         String role = request.getHeader("X-User-Role");
         String authorizationHeader = request.getHeader("Authorization");
