@@ -25,6 +25,20 @@ spring:
             - Path=/api/admin/tickets/**, /api/organizer/tickets/**
       default-filters:
         - AuthFilter
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:3000"  # Domain của front-end ReactJS
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+            allowedHeaders:
+              - "*"
+            allowCredentials: true
+            maxAge: 3600
 server:
   port: 8085
 identity:
