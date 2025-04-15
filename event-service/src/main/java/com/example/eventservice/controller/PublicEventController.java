@@ -1,5 +1,6 @@
 package com.example.eventservice.controller;
 
+import com.example.eventservice.dto.CategoryPublicListDto;
 import com.example.eventservice.dto.EventPublicDetailDto;
 import com.example.eventservice.dto.EventPublicListDto;
 import com.example.eventservice.service.EventService;
@@ -28,5 +29,12 @@ public class PublicEventController {
     public ResponseEntity<EventPublicDetailDto> getPublicEventDetail(@PathVariable Integer eventId) {
         EventPublicDetailDto eventDetail = eventService.getPublicEventDetail(eventId);
         return ResponseEntity.ok(eventDetail);
+    }
+
+    // Xem danh sách danh mục công khai
+    @GetMapping("/categories")
+    public ResponseEntity<List<CategoryPublicListDto>> getPublicCategories() {
+        List<CategoryPublicListDto> categories = eventService.getPublicCategories();
+        return ResponseEntity.ok(categories);
     }
 }
