@@ -32,8 +32,12 @@ public class EventService {
 
     @Autowired
     private TemplateAreaRepository templateAreaRepository;
+
     @Autowired
     private CategoryRepository categoryRepository;
+
+    @Autowired
+    private AzureBlobStorageService azureBlobStorageService;
 
     //Lấy danh sách sự kiện công khai dành cho User
     public List<EventPublicListDto> getPublicEvents() {
@@ -58,6 +62,12 @@ public class EventService {
         return convertToPublicDetailDto(event);
     }
 
+    // Lấy chi tiết một sự kiện theo ID
+    public Event getEventById(Integer eventId) {
+        return eventRepository.findById(eventId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy sự kiện"));
+    }
+
     @Transactional
     public Event createEventForOrganizer(EventRequestDto requestDto) {
         String userIdStr = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -66,6 +76,10 @@ public class EventService {
         //Kiểm tra category_id
         if (requestDto.getCategoryId() != null && !categoryService.categoryExists(requestDto.getCategoryId())) {
             throw new IllegalArgumentException("Danh mục không tồn tại");
+        }
+        //Kiểm tra sự kiện đã tồn tại hay chưa
+        if (eventRepository.existsByEventNameAndOrganizerId(requestDto.getName(), organizerId)) {
+            throw new IllegalArgumentException("Sự kiện đã tồn tại");
         }
         Event event = new Event();
         event.setOrganizerId(organizerId);
@@ -116,6 +130,10 @@ public class EventService {
         //Kiểm tra category_id
         if (requestDto.getCategoryId() != null && !categoryService.categoryExists(requestDto.getCategoryId())) {
             throw new IllegalArgumentException("Danh mục không tồn tại");
+        }
+        //Kiểm tra sự kiện đã tồn tại hay chưa
+        if (eventRepository.existsByEventNameAndOrganizerId(requestDto.getName(), organizerId)) {
+            throw new IllegalArgumentException("Sự kiện đã tồn tại");
         }
         Event event = new Event();
         event.setOrganizerId(organizerId);
@@ -199,6 +217,7 @@ public class EventService {
         if (!"pending".equals(event.getStatus())) {
             throw new IllegalStateException("Chỉ có thể xóa sự kiện ở trạng thái pending");
         }
+        azureBlobStorageService.deleteImage(event.getImageUrl());
         // Xóa các areas liên kết trước
         areaRepository.deleteByEventId(eventId);
         eventRepository.delete(event);
@@ -250,6 +269,7 @@ public class EventService {
         if (!"pending".equals(event.getStatus())) {
             throw new IllegalStateException("Chỉ có thể xóa sự kiện ở trạng thái pending");
         }
+        azureBlobStorageService.deleteImage(event.getImageUrl());
         // Xóa các areas liên kết trước
         areaRepository.deleteByEventId(eventId);
         eventRepository.delete(event);
@@ -284,8 +304,17 @@ public class EventService {
         if (requestDto.getDate() != null) event.setDate(requestDto.getDate());
         if (requestDto.getTime() != null) event.setTime(requestDto.getTime());
         if (requestDto.getLocation() != null) event.setLocation(requestDto.getLocation());
-        if (requestDto.getImageUrl() != null) event.setImageUrl(requestDto.getImageUrl());
+        event.setImageUrl(requestDto.getImageUrl());
         event.setUpdatedAt(LocalDateTime.now());
+    }
+
+    // Cập nhật URL hình ảnh sự kiện
+    @Transactional
+    public void updateEventImageUrl(Integer eventId, String imageUrl) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy sự kiện"));
+        event.setImageUrl(imageUrl);
+        eventRepository.save(event);
     }
 
     // Chuyển đổi Event sang EventDetailResponseDto

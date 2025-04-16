@@ -15,4 +15,5 @@ public class EventUpdateRequestDto {
     private String location;
     private String imageUrl;
     private String status;
+    private Boolean removeImage;
 }

@@ -5,12 +5,16 @@ import com.example.eventservice.dto.EventRequestDto;
 import com.example.eventservice.dto.EventResponseDto;
 import com.example.eventservice.dto.EventUpdateRequestDto;
 import com.example.eventservice.model.Event;
+import com.example.eventservice.service.AzureBlobStorageService;
 import com.example.eventservice.service.EventService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -19,10 +23,31 @@ public class AdminEventController {
 
     @Autowired
     private EventService eventService;
-    // Tạo sự kiện mới
-    @PostMapping("/events")
-    public ResponseEntity<EventResponseDto> createEvent(@Valid @RequestBody EventRequestDto requestDto) {
+    @Autowired
+    private AzureBlobStorageService azureBlobStorageService;
+
+    // Tạo sự kiện mới với hình ảnh
+    @PostMapping(value = "/events", consumes = {"multipart/form-data"})
+    public ResponseEntity<EventResponseDto> createEvent(
+            @Valid @RequestPart("event") EventRequestDto requestDto,
+            @RequestPart(value = "image", required = false) MultipartFile imageFile) throws IOException {
+        // Đảm bảo requestDto không có imageUrl ban đầu
+        requestDto.setImageUrl(null);
+
+        // Tạo sự kiện mà không có URL ảnh
         Event event = eventService.createEventForAdmin(requestDto);
+
+        // Nếu có file ảnh và sự kiện được tạo thành công, upload ảnh và cập nhật URL
+        if (imageFile != null && !imageFile.isEmpty()) {
+            try {
+                String imageUrl = azureBlobStorageService.uploadImage(imageFile);
+                event.setImageUrl(imageUrl);
+                eventService.updateEventImageUrl(event.getEventId(), imageUrl);
+            } catch (Exception e) {
+                // Xử lý lỗi upload ảnh, có thể log lỗi hoặc thông báo cho người dùng
+                throw new IOException("Không thể tải ảnh: " + e.getMessage(), e);
+            }
+        }
         return ResponseEntity.ok(new EventResponseDto(event.getEventId(), "Tạo sự kiện thành công"));
     }
 
@@ -54,9 +79,36 @@ public class AdminEventController {
         return ResponseEntity.ok(rejectedEvent);
     }
 
-    // Cập nhật sự kiện (pending)
-    @PutMapping("/events/{eventId}")
-    public ResponseEntity<EventDetailResponseDto> updateEvent(@PathVariable Integer eventId, @RequestBody EventUpdateRequestDto requestDto) {
+    // Cập nhật sự kiện với hình ảnh (nếu có)
+    @PutMapping(value = "/events/{eventId}", consumes = {"multipart/form-data"})
+    public ResponseEntity<EventDetailResponseDto> updateEvent(
+            @PathVariable Integer eventId,
+            @RequestPart("event") EventUpdateRequestDto requestDto,
+            @RequestPart(value = "image", required = false) MultipartFile imageFile) throws IOException {
+        // Lấy sự kiện hiện tại để kiểm tra imageUrl cũ
+        Event currentEvent = eventService.getEventById(eventId);
+        String oldImageUrl = currentEvent.getImageUrl();
+
+        // Xử lý logic hình ảnh
+        if (imageFile != null && !imageFile.isEmpty()) {
+            // Upload ảnh mới và thay thế ảnh cũ
+            String imageUrl = azureBlobStorageService.uploadImage(imageFile);
+            if (oldImageUrl != null) {
+                azureBlobStorageService.deleteImage(oldImageUrl);
+            }
+            requestDto.setImageUrl(imageUrl);
+        } else if (Boolean.TRUE.equals(requestDto.getRemoveImage())) {
+            // Gỡ ảnh: đặt imageUrl thành null và xóa ảnh cũ trên Azure
+            if (oldImageUrl != null) {
+                azureBlobStorageService.deleteImage(oldImageUrl);
+            }
+            requestDto.setImageUrl(null);
+        } else {
+            // Giữ nguyên imageUrl cũ
+            requestDto.setImageUrl(oldImageUrl);
+        }
+
+        // Cập nhật sự kiện
         EventDetailResponseDto updatedEvent = eventService.updateEventForAdmin(eventId, requestDto);
         return ResponseEntity.ok(updatedEvent);
     }
