@@ -29,7 +29,7 @@ spring:
         cors-configurations:
           '[/**]':
             allowedOrigins:
-              - "http://localhost:3000"  # Domain của front-end ReactJS
+              - "http://localhost:5173"  # Domain của front-end ReactJS
             allowedMethods:
               - GET
               - POST
