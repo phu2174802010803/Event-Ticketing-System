@@ -15,8 +15,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import jakarta.transaction.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -265,6 +267,27 @@ public class EventService {
                 .collect(Collectors.toList());
     }
 
+    // Thêm phương thức lấy sự kiện có banner cho trang chủ
+    public List<EventPublicDetailDto> getBannerEvents() {
+        List<Event> events = eventRepository.findTop4EventsWithBanner();
+        return events.stream()
+                .map(this::convertToPublicDetailDto)
+                .collect(Collectors.toList());
+    }
+
+    // Thêm phương thức lọc sự kiện công khai
+    public List<EventPublicListDto> filterPublicEvents(Integer categoryId, LocalDate dateFrom, LocalDate dateTo, String location) {
+        List<Event> events;
+        if (dateFrom != null && dateTo != null) {
+            events = eventRepository.findByCategoryIdAndDateRangeAndLocation(categoryId, dateFrom, dateTo, location);
+        } else {
+            events = eventRepository.findByCategoryIdAndLocation(categoryId, location);
+        }
+        return events.stream()
+                .map(this::convertToPublicListDto)
+                .collect(Collectors.toList());
+    }
+
     @Transactional
     public Event createEventForOrganizer(EventRequestDto requestDto) {
         String userIdStr = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -415,6 +438,7 @@ public class EventService {
             throw new IllegalStateException("Chỉ có thể xóa sự kiện ở trạng thái pending");
         }
         azureBlobStorageService.deleteImage(event.getImageUrl());
+        azureBlobStorageService.deleteImage(event.getBannerUrl());
         // Xóa các areas liên kết trước
         areaRepository.deleteByEventId(eventId);
         eventRepository.delete(event);
@@ -467,6 +491,7 @@ public class EventService {
             throw new IllegalStateException("Chỉ có thể xóa sự kiện ở trạng thái pending");
         }
         azureBlobStorageService.deleteImage(event.getImageUrl());
+        azureBlobStorageService.deleteImage(event.getBannerUrl());
         // Xóa các areas liên kết trước
         areaRepository.deleteByEventId(eventId);
         eventRepository.delete(event);
@@ -514,6 +539,15 @@ public class EventService {
         eventRepository.save(event);
     }
 
+    // Thêm phương thức update banner URL
+    @Transactional
+    public void updateEventBannerUrl(Integer eventId, String bannerUrl) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy sự kiện"));
+        event.setBannerUrl(bannerUrl);
+        eventRepository.save(event);
+    }
+
     // Chuyển đổi Event sang EventDetailResponseDto
     private EventDetailResponseDto convertToDetailDto(Event event) {
         EventDetailResponseDto dto = new EventDetailResponseDto();
@@ -527,6 +561,7 @@ public class EventService {
         dto.setTime(event.getTime());
         dto.setLocation(event.getLocation());
         dto.setImageUrl(event.getImageUrl());
+        dto.setBannerUrl(event.getBannerUrl());
         dto.setStatus(event.getStatus());
         return dto;
     }
@@ -549,6 +584,7 @@ public class EventService {
         dto.setTime(event.getTime());
         dto.setLocation(event.getLocation());
         dto.setImageUrl(event.getImageUrl());
+        dto.setBannerUrl(event.getBannerUrl());
         return dto;
     }
 
@@ -562,6 +598,7 @@ public class EventService {
         dto.setTime(event.getTime());
         dto.setLocation(event.getLocation());
         dto.setImageUrl(event.getImageUrl());
+        dto.setBannerUrl(event.getBannerUrl());
         dto.setCategory(categoryService.getCategoryById(event.getCategoryId()));
         return dto;
     }

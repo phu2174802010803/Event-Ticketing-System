@@ -18,5 +18,6 @@ public class EventDetailResponseDto {
     private LocalTime time;
     private String location;
     private String imageUrl;
+    private String bannerUrl;
     private String status;
 }

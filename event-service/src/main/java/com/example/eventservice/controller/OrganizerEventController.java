@@ -31,7 +31,8 @@ public class OrganizerEventController {
     @PostMapping(value = "/events", consumes = {"multipart/form-data"})
     public ResponseEntity<EventResponseDto> createEvent(
             @Valid @RequestPart("event") EventRequestDto requestDto,
-            @RequestPart(value = "image", required = false) MultipartFile imageFile) throws IOException {
+            @RequestPart(value = "image", required = false) MultipartFile imageFile,
+            @RequestPart(value = "banner", required = false) MultipartFile bannerFile) throws IOException {
         // Đảm bảo requestDto không có imageUrl ban đầu
         requestDto.setImageUrl(null);
 
@@ -48,6 +49,11 @@ public class OrganizerEventController {
                 // Xử lý lỗi upload ảnh, có thể log lỗi hoặc thông báo cho người dùng
                 throw new IOException("Không thể tải ảnh: " + e.getMessage(), e);
             }
+        }
+        if (bannerFile != null && !bannerFile.isEmpty()) {
+            String bannerUrl = azureBlobStorageService.uploadFile(bannerFile); // Sử dụng phương thức mới hỗ trợ video
+            event.setBannerUrl(bannerUrl);
+            eventService.updateEventBannerUrl(event.getEventId(), bannerUrl);
         }
         return ResponseEntity.ok(new EventResponseDto(event.getEventId(), "Tạo sự kiện thành công"));
     }
@@ -73,12 +79,14 @@ public class OrganizerEventController {
     public ResponseEntity<EventDetailResponseDto> updateEvent(
             @PathVariable Integer eventId,
             @RequestPart("event") EventUpdateRequestDto requestDto,
-            @RequestPart(value = "image", required = false) MultipartFile imageFile) throws IOException {
+            @RequestPart(value = "image", required = false) MultipartFile imageFile,
+            @RequestPart(value = "banner", required = false) MultipartFile bannerFile) throws IOException {
         Integer organizerId = Integer.parseInt((String) SecurityContextHolder.getContext().getAuthentication().getPrincipal());
 
         // Lấy sự kiện hiện tại để kiểm tra imageUrl cũ
         Event currentEvent = eventService.getEventById(eventId);
         String oldImageUrl = currentEvent.getImageUrl();
+        String oldBannerUrl = currentEvent.getBannerUrl();
 
         // Xử lý logic hình ảnh
         if (imageFile != null && !imageFile.isEmpty()) {
@@ -97,6 +105,27 @@ public class OrganizerEventController {
         } else {
             // Giữ nguyên imageUrl cũ
             requestDto.setImageUrl(oldImageUrl);
+        }
+
+        // Xử lý logic banner giống như image
+        if (bannerFile != null && !bannerFile.isEmpty()) {
+            // Upload banner mới và thay thế banner cũ
+            String bannerUrl = azureBlobStorageService.uploadFile(bannerFile);
+            if (oldBannerUrl != null) {
+                azureBlobStorageService.deleteImage(oldBannerUrl);
+            }
+            currentEvent.setBannerUrl(bannerUrl);
+            eventService.updateEventBannerUrl(eventId, bannerUrl);
+        } else if (Boolean.TRUE.equals(requestDto.getRemoveBanner())) {
+            // Gỡ banner: đặt bannerUrl thành null và xóa banner cũ trên Azure
+            if (oldBannerUrl != null) {
+                azureBlobStorageService.deleteImage(oldBannerUrl);
+            }
+            currentEvent.setBannerUrl(null);
+            eventService.updateEventBannerUrl(eventId, null);
+        } else {
+            // Giữ nguyên bannerUrl cũ
+            currentEvent.setBannerUrl(oldBannerUrl);
         }
 
         // Cập nhật sự kiện

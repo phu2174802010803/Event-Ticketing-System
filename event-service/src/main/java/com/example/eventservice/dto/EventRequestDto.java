@@ -30,6 +30,8 @@ public class EventRequestDto {
 
     private String imageUrl;
 
+    private String bannerUrl;
+
     private String status; //Chỉ dùng cho admin
 
     private List<AreaRequestDto> areas; //Danh sách khu vực

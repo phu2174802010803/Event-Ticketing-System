@@ -12,4 +12,5 @@ public class EventPublicListDto {
     private LocalTime time;       // Giờ diễn ra
     private String location;      // Địa điểm
     private String imageUrl;      // URL hình ảnh
+    private String bannerUrl;     // URL banner
 }

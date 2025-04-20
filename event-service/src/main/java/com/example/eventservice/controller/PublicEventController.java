@@ -5,10 +5,13 @@ import com.example.eventservice.dto.EventPublicDetailDto;
 import com.example.eventservice.dto.EventPublicListDto;
 import com.example.eventservice.service.EventService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/events/public")
@@ -56,6 +59,24 @@ public class PublicEventController {
     @GetMapping("/search")
     public ResponseEntity<List<EventPublicListDto>> searchPublicEvents(@RequestParam String keyword) {
         List<EventPublicListDto> events = eventService.searchPublicEvents(keyword);
+        return ResponseEntity.ok(events);
+    }
+
+    // Lấy sự kiện có banner cho trang chủ
+    @GetMapping("/banners")
+    public ResponseEntity<List<EventPublicDetailDto>> getBanners() {
+        List<EventPublicDetailDto> banners = eventService.getBannerEvents();
+        return ResponseEntity.ok(banners);
+    }
+
+    // Lọc sự kiện công khai theo các tiêu chí
+    @GetMapping("/filter")
+    public ResponseEntity<List<EventPublicListDto>> filterPublicEvents(
+            @RequestParam(required = false) Integer categoryId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
+            @RequestParam(required = false) String location) {
+        List<EventPublicListDto> events = eventService.filterPublicEvents(categoryId, dateFrom, dateTo, location);
         return ResponseEntity.ok(events);
     }
 }

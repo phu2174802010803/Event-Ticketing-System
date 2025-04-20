@@ -20,15 +20,17 @@ public class AzureBlobStorageService {
     private final String containerName = "event-images";
 
     public String uploadImage(MultipartFile file) throws IOException {
+        return uploadFile(file); // Gọi phương thức chung
+    }
+
+    public String uploadFile(MultipartFile file) throws IOException {
         BlobContainerClient containerClient = blobServiceClient.getBlobContainerClient(containerName);
         String fileName = UUID.randomUUID().toString() + "_" + file.getOriginalFilename();
         BlobClient blobClient = containerClient.getBlobClient(fileName);
 
-        // Thiết lập Content-Type dựa trên loại file
         String contentType = file.getContentType();
         BlobHttpHeaders headers = new BlobHttpHeaders().setContentType(contentType);
 
-        // Tải file lên và áp dụng headers
         blobClient.upload(file.getInputStream(), file.getSize(), true);
         blobClient.setHttpHeaders(headers);
 

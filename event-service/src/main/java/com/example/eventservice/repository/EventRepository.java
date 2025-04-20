@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -53,4 +54,24 @@ public interface EventRepository extends JpaRepository<Event, Integer> {
     @Query("SELECT e FROM Event e WHERE e.status = 'approved' AND " +
             "(e.name LIKE %:keyword% OR e.location LIKE %:keyword%)")
     List<Event> searchPublicEvents(@Param("keyword") String keyword);
+
+    // Phương thức mới để lấy 4 sự kiện có banner
+    @Query("SELECT e FROM Event e WHERE e.status = 'approved' AND e.bannerUrl IS NOT NULL ORDER BY e.date ASC LIMIT 4")
+    List<Event> findTop4EventsWithBanner();
+
+    // Lọc sự kiện công khai theo danh mục, ngày, địa điểm
+    @Query("SELECT e FROM Event e WHERE e.status = 'approved' " +
+            "AND (:categoryId IS NULL OR e.categoryId = :categoryId) " +
+            "AND (:location IS NULL OR e.location LIKE %:location%)")
+    List<Event> findByCategoryIdAndLocation(@Param("categoryId") Integer categoryId,
+                                            @Param("location") String location);
+
+    @Query("SELECT e FROM Event e WHERE e.status = 'approved' " +
+            "AND (:categoryId IS NULL OR e.categoryId = :categoryId) " +
+            "AND e.date >= :dateFrom AND e.date <= :dateTo " +
+            "AND (:location IS NULL OR e.location LIKE %:location%)")
+    List<Event> findByCategoryIdAndDateRangeAndLocation(@Param("categoryId") Integer categoryId,
+                                                        @Param("dateFrom") LocalDate dateFrom,
+                                                        @Param("dateTo") LocalDate dateTo,
+                                                        @Param("location") String location);
 }

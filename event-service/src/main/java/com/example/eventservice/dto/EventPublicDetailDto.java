@@ -13,5 +13,6 @@ public class EventPublicDetailDto {
     private LocalTime time;       // Giờ diễn ra
     private String location;      // Địa điểm
     private String imageUrl;      // URL hình ảnh
+    private String bannerUrl;      // URL banner
     private CategoryResponseDto category; // Thông tin danh mục
 }

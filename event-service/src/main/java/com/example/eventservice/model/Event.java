@@ -43,6 +43,9 @@ public class Event {
     @Column(name = "image_url")
     private String imageUrl;
 
+    @Column(name = "banner_url")  // Trường mới để lưu URL banner
+    private String bannerUrl;
+
     @Column(nullable = false)
     private String status = "pending";
 
