@@ -91,6 +91,10 @@
 			<artifactId>azure-storage-blob</artifactId>
 			<version>12.25.0</version> <!-- Hoặc phiên bản mới nhất tương thích -->
 		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-logging</artifactId>
+		</dependency>
 	</dependencies>
 
 	<build>

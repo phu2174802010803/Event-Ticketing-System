@@ -23,6 +23,12 @@ public class MapTemplate {
     @Column(name = "area_count", nullable = false)
     private Integer areaCount;
 
+    @Column(name = "map_width", nullable = false)
+    private Integer mapWidth;
+
+    @Column(name = "map_height", nullable = false)
+    private Integer mapHeight;
+
     @OneToMany(mappedBy = "mapTemplate", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TemplateArea> areas;
 }

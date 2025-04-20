@@ -40,4 +40,17 @@ public interface EventRepository extends JpaRepository<Event, Integer> {
     @Query("SELECT COUNT(e) > 0 FROM Event e WHERE e.name = :name AND e.organizerId = :organizerId")
     boolean existsByEventNameAndOrganizerId(@Param("name") String name,
                                             @Param("organizerId") Integer organizerId);
+
+    // Lấy sự kiện theo danh mục
+    @Query("SELECT e FROM Event e WHERE e.categoryId = :categoryId AND e.status = 'approved'")
+    List<Event> findPublicEventsByCategory(@Param("categoryId") Integer categoryId);
+
+    // Lấy sự kiện nổi bật (sắp xếp theo ngày gần nhất, giới hạn 5 sự kiện)
+    @Query("SELECT e FROM Event e WHERE e.status = 'approved' ORDER BY e.date ASC LIMIT 5")
+    List<Event> findFeaturedPublicEvents();
+
+    // Tìm kiếm sự kiện công khai theo tên hoặc địa điểm
+    @Query("SELECT e FROM Event e WHERE e.status = 'approved' AND " +
+            "(e.name LIKE %:keyword% OR e.location LIKE %:keyword%)")
+    List<Event> searchPublicEvents(@Param("keyword") String keyword);
 }

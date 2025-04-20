@@ -37,4 +37,25 @@ public class PublicEventController {
         List<CategoryPublicListDto> categories = eventService.getPublicCategories();
         return ResponseEntity.ok(categories);
     }
+
+    // Lấy sự kiện theo danh mục
+    @GetMapping("/category/{categoryId}")
+    public ResponseEntity<List<EventPublicListDto>> getPublicEventsByCategory(@PathVariable Integer categoryId) {
+        List<EventPublicListDto> events = eventService.getPublicEventsByCategory(categoryId);
+        return ResponseEntity.ok(events);
+    }
+
+    // Lấy sự kiện nổi bật
+    @GetMapping("/featured")
+    public ResponseEntity<List<EventPublicListDto>> getFeaturedPublicEvents() {
+        List<EventPublicListDto> events = eventService.getFeaturedPublicEvents();
+        return ResponseEntity.ok(events);
+    }
+
+    // Tìm kiếm sự kiện công khai theo tên hoặc địa điểm
+    @GetMapping("/search")
+    public ResponseEntity<List<EventPublicListDto>> searchPublicEvents(@RequestParam String keyword) {
+        List<EventPublicListDto> events = eventService.searchPublicEvents(keyword);
+        return ResponseEntity.ok(events);
+    }
 }

@@ -10,12 +10,14 @@ import com.example.eventservice.repository.CategoryRepository;
 import com.example.eventservice.repository.EventRepository;
 import com.example.eventservice.repository.TemplateAreaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import jakarta.transaction.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,6 +40,177 @@ public class EventService {
 
     @Autowired
     private AzureBlobStorageService azureBlobStorageService;
+
+    @Autowired
+    private RedisTemplate<String, String> redisTemplate;
+
+    private static final int MAX_ACTIVE_USERS = 2; // Giới hạn 2 người dùng đồng thời
+    private static final int ACCESS_TIME_MINUTES = 2; // TTL cho người dùng hoạt động
+    private static final int CONFIRMATION_INTERVAL_MINUTES = 5; // TTL cho người dùng trong hàng đợi
+
+    // Tham gia hàng đợi
+    public String joinQueue(Integer eventId, Integer userId) {
+        String activeKey = "active:" + eventId; // Sorted Set cho người dùng hoạt động
+        String queueKey = "queue:" + eventId;   // List cho hàng đợi
+        String userKey = "user:" + eventId + ":" + userId; // Trạng thái người dùng
+        String userActiveKey = "user_active:" + eventId + ":" + userId; // Khóa TTL riêng
+
+        // Kiểm tra xem người dùng đã ở trong activeKey chưa
+        Double score = redisTemplate.opsForZSet().score(activeKey, userId.toString());
+        if (score != null) {
+            // Người dùng đã ở trong activeKey, lấy thứ hạng và thông báo
+            Long rank = redisTemplate.opsForZSet().rank(activeKey, userId.toString());
+            return "Bạn đã ở trong danh sách hoạt động, vị trí thứ " + (rank != null ? rank + 1 : "không xác định");
+        }
+
+        // Kiểm tra số lượng người dùng trong activeKey
+        Long activeCount = redisTemplate.opsForZSet().size(activeKey);
+        if (activeCount != null && activeCount < MAX_ACTIVE_USERS) {
+            // Thêm vào danh sách hoạt động
+            long timestamp = System.currentTimeMillis();
+            redisTemplate.opsForZSet().add(activeKey, userId.toString(), timestamp);
+            redisTemplate.opsForValue().set(userActiveKey, "active", ACCESS_TIME_MINUTES, TimeUnit.MINUTES);
+            redisTemplate.opsForValue().set(userKey, "active");
+            return "Bạn có thể truy cập ngay lập tức";
+        } else {
+            // Thêm vào hàng đợi
+            Long position = redisTemplate.opsForList().rightPush(queueKey, userId.toString());
+            redisTemplate.opsForValue().set(userKey, "queue", CONFIRMATION_INTERVAL_MINUTES, TimeUnit.MINUTES);
+            return "Bạn đang ở vị trí thứ " + position + " trong hàng đợi";
+        }
+    }
+
+    // Kiểm tra trạng thái hàng đợi
+    public String checkQueueStatus(Integer eventId, Integer userId) {
+        String activeKey = "active:" + eventId;
+        String queueKey = "queue:" + eventId;
+        String userKey = "user:" + eventId + ":" + userId;
+
+        String status = redisTemplate.opsForValue().get(userKey);
+        if ("active".equals(status)) {
+            Long rank = redisTemplate.opsForZSet().rank(activeKey, userId.toString());
+            if (rank != null) {
+                return "Bạn đang ở vị trí thứ " + (rank + 1) + " trong danh sách hoạt động";
+            } else {
+                return "Bạn không ở trong danh sách hoạt động";
+            }
+        } else if ("queue".equals(status)) {
+            Long position = redisTemplate.opsForList().indexOf(queueKey, userId.toString());
+            if (position != null && position >= 0) {
+                return "Bạn đang ở vị trí thứ " + (position + 1) + " trong hàng đợi";
+            }
+        }
+        return "Bạn không ở trong hàng đợi";
+    }
+
+    // Xác nhận tiếp tục trong hàng đợi
+    public void confirmPresence(Integer eventId, Integer userId) {
+        String userKey = "user:" + eventId + ":" + userId;
+        String status = redisTemplate.opsForValue().get(userKey);
+        if ("queue".equals(status)) {
+            redisTemplate.expire(userKey, CONFIRMATION_INTERVAL_MINUTES, TimeUnit.MINUTES);
+        }
+    }
+
+    // Rời hàng đợi
+    public void leaveQueue(Integer eventId, Integer userId) {
+        String activeKey = "active:" + eventId;
+        String queueKey = "queue:" + eventId;
+        String userKey = "user:" + eventId + ":" + userId;
+        String userActiveKey = "user_active:" + eventId + ":" + userId;
+
+        redisTemplate.opsForZSet().remove(activeKey, userId.toString());
+        redisTemplate.opsForList().remove(queueKey, 0, userId.toString());
+        redisTemplate.delete(userKey);
+        redisTemplate.delete(userActiveKey);
+    }
+
+    // Xử lý khi người dùng hết hạn (được gọi từ Redis Pub/Sub)
+    public void handleUserExpired(String message) {
+        if (message.startsWith("user_active:")) {
+            String[] parts = message.split(":");
+            Integer eventId = Integer.parseInt(parts[1]);
+            Integer userId = Integer.parseInt(parts[2]);
+            removeUserFromActive(eventId, userId);
+            moveFromQueueToActive(eventId);
+        }
+    }
+
+    // Xóa người dùng khỏi danh sách hoạt động
+    private void removeUserFromActive(Integer eventId, Integer userId) {
+        String activeKey = "active:" + eventId;
+        String userKey = "user:" + eventId + ":" + userId;
+        redisTemplate.opsForZSet().remove(activeKey, userId.toString());
+        redisTemplate.delete(userKey);
+    }
+
+    // Chuyển người dùng từ hàng đợi lên danh sách hoạt động
+    private void moveFromQueueToActive(Integer eventId) {
+        String activeKey = "active:" + eventId;
+        String queueKey = "queue:" + eventId;
+        Long activeCount = redisTemplate.opsForZSet().size(activeKey);
+
+        while (activeCount != null && activeCount < MAX_ACTIVE_USERS && redisTemplate.opsForList().size(queueKey) > 0) {
+            String nextUser = redisTemplate.opsForList().leftPop(queueKey);
+            if (nextUser != null) {
+                Integer userId = Integer.parseInt(nextUser);
+                String userKey = "user:" + eventId + ":" + userId;
+                String userActiveKey = "user_active:" + eventId + ":" + userId;
+                long timestamp = System.currentTimeMillis();
+                redisTemplate.opsForZSet().add(activeKey, nextUser, timestamp);
+                redisTemplate.opsForValue().set(userKey, "active");
+                redisTemplate.opsForValue().set(userActiveKey, "active", ACCESS_TIME_MINUTES, TimeUnit.MINUTES);
+                activeCount = redisTemplate.opsForZSet().size(activeKey);
+            }
+        }
+    }
+
+    // Các phương thức khác giữ nguyên từ mã cũ của bạn
+    public MapDetailDto getEventMap(Integer eventId, Integer userId) {
+        String activeKey = "active:" + eventId;
+        if (redisTemplate.opsForZSet().score(activeKey, userId.toString()) == null) {
+            throw new RuntimeException("Bạn cần tham gia hàng đợi trước khi xem map khu vực");
+        }
+
+        Event event = eventRepository.findPublicEventById(eventId)
+                .orElseThrow(() -> new RuntimeException("Sự kiện không tồn tại hoặc chưa được phê duyệt"));
+
+        List<TemplateArea> templateAreas = templateAreaRepository.findByMapTemplateTemplateId(event.getMapTemplateId());
+        if (templateAreas.isEmpty()) {
+            throw new RuntimeException("Không tìm thấy template map");
+        }
+
+        Integer mapWidth = templateAreas.get(0).getMapTemplate().getMapWidth();
+        Integer mapHeight = templateAreas.get(0).getMapTemplate().getMapHeight();
+
+        List<Area> areas = areaRepository.findAll().stream()
+                .filter(area -> area.getEventId().equals(eventId))
+                .collect(Collectors.toList());
+
+        List<AreaDetailDto> areaDtos = areas.stream()
+                .map(area -> {
+                    TemplateArea templateArea = templateAreaRepository.findById(area.getTemplateAreaId())
+                            .orElseThrow(() -> new RuntimeException("Không tìm thấy template area"));
+                    AreaDetailDto dto = new AreaDetailDto();
+                    dto.setAreaId(area.getAreaId());
+                    dto.setName(area.getName());
+                    dto.setX(templateArea.getX());
+                    dto.setY(templateArea.getY());
+                    dto.setWidth(templateArea.getWidth());
+                    dto.setHeight(templateArea.getHeight());
+                    dto.setTotalTickets(area.getTotalTickets());
+                    dto.setAvailableTickets(area.getAvailableTickets());
+                    dto.setPrice(area.getPrice());
+                    return dto;
+                })
+                .collect(Collectors.toList());
+
+        MapDetailDto mapDetail = new MapDetailDto();
+        mapDetail.setMapWidth(mapWidth);
+        mapDetail.setMapHeight(mapHeight);
+        mapDetail.setAreas(areaDtos);
+        return mapDetail;
+    }
 
     //Lấy danh sách sự kiện công khai dành cho User
     public List<EventPublicListDto> getPublicEvents() {
@@ -66,6 +239,30 @@ public class EventService {
     public Event getEventById(Integer eventId) {
         return eventRepository.findById(eventId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sự kiện"));
+    }
+
+    // Lấy sự kiện theo danh mục
+    public List<EventPublicListDto> getPublicEventsByCategory(Integer categoryId) {
+        List<Event> events = eventRepository.findPublicEventsByCategory(categoryId);
+        return events.stream()
+                .map(this::convertToPublicListDto)
+                .collect(Collectors.toList());
+    }
+
+    // Lấy sự kiện nổi bật
+    public List<EventPublicListDto> getFeaturedPublicEvents() {
+        List<Event> events = eventRepository.findFeaturedPublicEvents();
+        return events.stream()
+                .map(this::convertToPublicListDto)
+                .collect(Collectors.toList());
+    }
+
+    // Tìm kiếm sự kiện công khai theo tên hoặc địa điểm
+    public List<EventPublicListDto> searchPublicEvents(String keyword) {
+        List<Event> events = eventRepository.searchPublicEvents(keyword);
+        return events.stream()
+                .map(this::convertToPublicListDto)
+                .collect(Collectors.toList());
     }
 
     @Transactional

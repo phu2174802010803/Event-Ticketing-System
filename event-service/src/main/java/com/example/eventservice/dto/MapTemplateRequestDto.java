@@ -16,5 +16,11 @@ public class MapTemplateRequestDto {
     @NotNull(message = "Số lượng khu vực là bắt buộc")
     private Integer areaCount;
 
+    @NotNull(message = "Chiều rộng map là bắt buộc")
+    private Integer mapWidth;
+
+    @NotNull(message = "Chiều cao map là bắt buộc")
+    private Integer mapHeight;
+
     private List<TemplateAreaRequestDto> areas;
 }

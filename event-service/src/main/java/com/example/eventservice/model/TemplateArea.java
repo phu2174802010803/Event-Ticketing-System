@@ -18,4 +18,16 @@ public class TemplateArea {
 
     @Column(nullable = false)
     private String name;
+
+    @Column(nullable = false)
+    private Integer x;
+
+    @Column(nullable = false)
+    private Integer y;
+
+    @Column(nullable = false)
+    private Integer width;
+
+    @Column(nullable = false)
+    private Integer height;
 }
