@@ -88,6 +88,25 @@ public class UserService {
         return user;
     }
 
+    // Phương thức tìm kiếm với caching
+    public Optional<User> findByEmail(String email) {
+        String key = "user:email:" + email;
+        String userId = redisTemplate.opsForValue().get(key);
+
+        if (userId != null) {
+            Optional<User> cachedUser = userRepository.findById(Integer.parseInt(userId));
+            if (cachedUser.isPresent()) {
+                return cachedUser;
+            }
+        }
+
+        Optional<User> user = userRepository.findByEmail(email);
+        if (user.isPresent()) {
+            redisTemplate.opsForValue().set(key, user.get().getUserId().toString(), 10, TimeUnit.MINUTES);
+        }
+        return user;
+    }
+
     // Cập nhật thông tin người dùng và xóa cache
     @Transactional
     public User save(User user) {
@@ -129,7 +148,5 @@ public class UserService {
         redisTemplate.delete(key); // Xóa cache khi mật khẩu thay đổi
     }
 
-    public Optional<User> findByEmail(String email) {
-        return userRepository.findByEmail(email);
-    }
+
 }
