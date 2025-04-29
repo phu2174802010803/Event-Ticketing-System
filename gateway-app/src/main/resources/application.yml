@@ -1,7 +1,8 @@
 spring:
   application:
     name: gateway-app
-  redis: # Thêm cấu hình Redis
+  data:
+    redis:
       host: localhost
       port: 6379
   cloud:
@@ -14,18 +15,29 @@ spring:
         - id: event-service
           uri: http://localhost:8083
           predicates:
-            - Path=/api/events/public/**, /api/events/**, /api/queue/**
+            - Path=/api/events/public/**, /api/events/**, /ws/**, /ws-native/**
+          filters:
+            - name: ModifyResponseBody
+              args:
+                  inClass: java.lang.String
+                  outClass: java.lang.String
+                  rewriteFunction: "#{@cacheRewriteFunction}"
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10   # Tăng lên 10 yêu cầu/phút
+                redis-rate-limiter.burstCapacity: 20    # Tăng lên 20 yêu cầu đột biến
+                key-resolver: "#{@remoteAddrKeyResolver}"
         - id: ticket-service
           uri: http://localhost:8084
           predicates:
-            - Path=/api/tickets/**
+            - Path=/api/tickets/**, /api/queue/**
       default-filters:
         - AuthFilter
       globalcors:
         cors-configurations:
           '[/**]':
             allowedOrigins:
-              - "http://localhost:3000"  # Domain của front-end ReactJS
+              - "http://localhost:5173"
             allowedMethods:
               - GET
               - POST
@@ -37,6 +49,8 @@ spring:
             maxAge: 3600
 server:
   port: 8080
+  http2:
+    enabled: true                               # Bật HTTP/2
 identity:
   service:
     url: http://localhost:8081
