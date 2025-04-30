@@ -1,8 +1,11 @@
 package com.example.ticketservice.controller;
 
+import com.example.ticketservice.dto.TicketPurchaseRequest;
+import com.example.ticketservice.dto.TicketPurchaseResponse;
 import com.example.ticketservice.dto.TicketSelectionRequest;
 import com.example.ticketservice.dto.TicketSelectionResponse;
 import com.example.ticketservice.service.TicketService;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +26,16 @@ public class TicketController {
         Integer userId = Integer.parseInt((String) SecurityContextHolder.getContext().getAuthentication().getPrincipal());
         String token = authorizationHeader.substring(7); // Loại bỏ "Bearer "
         TicketSelectionResponse response = ticketService.selectTickets(request, userId, token);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/purchase")
+    public ResponseEntity<TicketPurchaseResponse> purchaseTickets(
+            @Valid @RequestBody TicketPurchaseRequest request,
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String authorizationHeader) {
+        Integer userId = Integer.parseInt((String) SecurityContextHolder.getContext().getAuthentication().getPrincipal());
+        String token = authorizationHeader.substring(7); // Loại bỏ "Bearer "
+        TicketPurchaseResponse response = ticketService.purchaseTickets(request, userId, token);
         return ResponseEntity.ok(response);
     }
 }
