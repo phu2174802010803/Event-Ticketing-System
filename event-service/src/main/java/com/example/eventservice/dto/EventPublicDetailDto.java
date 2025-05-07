@@ -3,6 +3,7 @@ package com.example.eventservice.dto;
 import lombok.Data;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 
 @Data
 public class EventPublicDetailDto {
@@ -15,4 +16,5 @@ public class EventPublicDetailDto {
     private String imageUrl;      // URL hình ảnh
     private String bannerUrl;      // URL banner
     private CategoryResponseDto category; // Thông tin danh mục
+    private List<SellingPhaseResponseDto> sellingPhases;
 }

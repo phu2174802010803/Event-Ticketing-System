@@ -1,9 +1,6 @@
 package com.example.eventservice.controller;
 
-import com.example.eventservice.dto.EventDetailResponseDto;
-import com.example.eventservice.dto.EventRequestDto;
-import com.example.eventservice.dto.EventResponseDto;
-import com.example.eventservice.dto.EventUpdateRequestDto;
+import com.example.eventservice.dto.*;
 import com.example.eventservice.model.Event;
 import com.example.eventservice.service.AzureBlobStorageService;
 import com.example.eventservice.service.EventService;
@@ -141,4 +138,33 @@ public class OrganizerEventController {
         return ResponseEntity.ok("Xóa sự kiện thành công");
     }
 
+    // Tạo phiên bán vé
+    @PostMapping("/events/{eventId}/phases")
+    public ResponseEntity<SellingPhaseResponseDto> createSellingPhase(
+            @PathVariable Integer eventId,
+            @Valid @RequestBody SellingPhaseRequestDto requestDto) {
+        SellingPhaseResponseDto response = eventService.createSellingPhase(eventId, requestDto);
+        return ResponseEntity.ok(response);
+    }
+
+    // Xem phiên bán vé
+    @GetMapping("/events/{eventId}/phases")
+    public ResponseEntity<List<SellingPhaseResponseDto>> getSellingPhases(@PathVariable Integer eventId) {
+        List<SellingPhaseResponseDto> phases = eventService.getSellingPhasesByEvent(eventId);
+        return ResponseEntity.ok(phases);
+    }
+
+    @PutMapping("/events/phases/{phaseId}")
+    public ResponseEntity<SellingPhaseResponseDto> updateSellingPhase(
+            @PathVariable Integer phaseId,
+            @Valid @RequestBody SellingPhaseRequestDto requestDto) {
+        SellingPhaseResponseDto response = eventService.updateSellingPhase(phaseId, requestDto);
+        return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping("/events/phases/{phaseId}")
+    public ResponseEntity<String> deleteSellingPhase(@PathVariable Integer phaseId) {
+        eventService.deleteSellingPhase(phaseId);
+        return ResponseEntity.ok("Xóa phiên bán vé thành công");
+    }
 }

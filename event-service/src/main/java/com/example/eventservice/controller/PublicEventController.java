@@ -3,6 +3,7 @@ package com.example.eventservice.controller;
 import com.example.eventservice.dto.CategoryPublicListDto;
 import com.example.eventservice.dto.EventPublicDetailDto;
 import com.example.eventservice.dto.EventPublicListDto;
+import com.example.eventservice.dto.SellingPhaseResponseDto;
 import com.example.eventservice.service.EventService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -78,5 +79,12 @@ public class PublicEventController {
             @RequestParam(required = false) String location) {
         List<EventPublicListDto> events = eventService.filterPublicEvents(categoryId, dateFrom, dateTo, location);
         return ResponseEntity.ok(events);
+    }
+
+    // Xem danh sách phiên bán vé công khai của sự kiện
+    @GetMapping("/{eventId}/phases")
+    public ResponseEntity<List<SellingPhaseResponseDto>> getSellingPhases(@PathVariable Integer eventId) {
+        List<SellingPhaseResponseDto> phases = eventService.getPublicSellingPhasesByEvent(eventId);
+        return ResponseEntity.ok(phases);
     }
 }
