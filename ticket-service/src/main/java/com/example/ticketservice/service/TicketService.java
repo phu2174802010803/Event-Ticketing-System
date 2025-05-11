@@ -35,17 +35,23 @@ public class TicketService {
             throw new IllegalArgumentException("Bạn cần tham gia hàng đợi trước khi chọn vé");
         }
 
+        AreaDetailDto areaDetail = eventClient.getAreaDetail(request.getEventId(), request.getAreaId(), token);
+        if (areaDetail == null) {
+            throw new IllegalArgumentException("Không tìm thấy khu vực");
+        }
+
         // Kiểm tra phiên bán vé
         SellingPhaseResponse[] phases = eventClient.getSellingPhases(request.getEventId(), token);
         SellingPhaseResponse activePhase = null;
         for (SellingPhaseResponse phase : phases) {
-            if (phase.getPhaseId().equals(request.getPhaseId())) {
+            if (phase.getPhaseId().equals(request.getPhaseId()) &&
+                    (phase.getAreaId() == null || phase.getAreaId().equals(request.getAreaId()))) {
                 activePhase = phase;
                 break;
             }
         }
         if (activePhase == null) {
-            throw new IllegalArgumentException("Phiên bán vé không tồn tại");
+            throw new IllegalArgumentException("Phiên bán vé không tồn tại hoặc không áp dụng cho khu vực này");
         }
         if (activePhase.getStartTime().isAfter(LocalDateTime.now()) || activePhase.getEndTime().isBefore(LocalDateTime.now())) {
             throw new IllegalArgumentException("Phiên bán vé không trong thời gian hoạt động");
@@ -53,21 +59,11 @@ public class TicketService {
         if (activePhase.getTicketsAvailable() < request.getQuantity()) {
             throw new IllegalArgumentException("Không đủ vé trong phiên bán vé này");
         }
-
-        // Kiểm tra số lượng vé tối đa
-        if (request.getQuantity() > MAX_TICKETS_PER_TRANSACTION) {
-            throw new IllegalArgumentException("Số lượng vé tối đa là " + MAX_TICKETS_PER_TRANSACTION);
-        }
-
-        // Lấy thông tin khu vực
-        AreaDetailDto areaDetail = eventClient.getAreaDetail(request.getEventId(), request.getAreaId(), token);
-        if (areaDetail == null) {
-            throw new IllegalArgumentException("Không tìm thấy khu vực");
-        }
-
-        // Kiểm tra số vé còn lại
         if (areaDetail.getAvailableTickets() < request.getQuantity()) {
             throw new IllegalArgumentException("Không đủ vé trong khu vực");
+        }
+        if (request.getQuantity() > MAX_TICKETS_PER_TRANSACTION) {
+            throw new IllegalArgumentException("Số lượng vé tối đa là " + MAX_TICKETS_PER_TRANSACTION);
         }
 
         // Kiểm tra vé đã giữ ở khu vực khác
@@ -100,7 +96,6 @@ public class TicketService {
 
         // Tạo transactionId
         String transactionId = UUID.randomUUID().toString();
-
         TicketSelectionResponse response = new TicketSelectionResponse();
         response.setTransactionId(transactionId);
         response.setMessage("Chọn vé thành công, vui lòng thanh toán trong " + HOLD_TIME_MINUTES + " phút");
