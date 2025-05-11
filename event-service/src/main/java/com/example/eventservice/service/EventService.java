@@ -132,9 +132,17 @@ public class EventService {
                 .map(phase -> {
                     String status = determinePhaseStatus(phase.getStartTime(), phase.getEndTime());
                     redisTemplate.opsForValue().set("phase:status:" + phase.getPhaseId(), status);
+                    String areaName = null;
+                    if (phase.getAreaId() != null) {
+                        Area area = areaRepository.findById(phase.getAreaId())
+                                .orElseThrow(() -> new RuntimeException("Không tìm thấy khu vực"));
+                        areaName = area.getName();
+                    }
                     return new SellingPhaseResponseDto(
                             phase.getPhaseId(),
                             phase.getEventId(),
+                            phase.getAreaId(),
+                            areaName,
                             phase.getStartTime(),
                             phase.getEndTime(),
                             phase.getTicketsAvailable(),
@@ -195,9 +203,17 @@ public class EventService {
                 .map(phase -> {
                     String status = determinePhaseStatus(phase.getStartTime(), phase.getEndTime());
                     redisTemplate.opsForValue().set("phase:status:" + phase.getPhaseId(), status);
+                    String areaName = null;
+                    if (phase.getAreaId() != null) {
+                        Area area = areaRepository.findById(phase.getAreaId())
+                                .orElseThrow(() -> new RuntimeException("Không tìm thấy khu vực"));
+                        areaName = area.getName();
+                    }
                     return new SellingPhaseResponseDto(
                             phase.getPhaseId(),
                             phase.getEventId(),
+                            phase.getAreaId(),
+                            areaName,
                             phase.getStartTime(),
                             phase.getEndTime(),
                             phase.getTicketsAvailable(),
@@ -227,9 +243,17 @@ public class EventService {
                 .map(phase -> {
                     String status = determinePhaseStatus(phase.getStartTime(), phase.getEndTime());
                     redisTemplate.opsForValue().set("phase:status:" + phase.getPhaseId(), status);
+                    String areaName = null;
+                    if (phase.getAreaId() != null) {
+                        Area area = areaRepository.findById(phase.getAreaId())
+                                .orElseThrow(() -> new RuntimeException("Không tìm thấy khu vực"));
+                        areaName = area.getName();
+                    }
                     return new SellingPhaseResponseDto(
                             phase.getPhaseId(),
                             phase.getEventId(),
+                            phase.getAreaId(),
+                            areaName,
                             phase.getStartTime(),
                             phase.getEndTime(),
                             phase.getTicketsAvailable(),
@@ -374,58 +398,52 @@ public class EventService {
             throw new RuntimeException("Bạn không có quyền tạo phiên bán vé cho sự kiện này");
         }
 
-        //Kiểm tra cập nhật thời gian không trong quá khứ
+        // Kiểm tra thời gian hợp lệ
         if (requestDto.getStartTime().isBefore(LocalDateTime.now())) {
             throw new IllegalArgumentException("Thời gian bắt đầu không được trong quá khứ");
         }
-        if (requestDto.getEndTime().isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException("Thời gian kết thúc không được trong quá khứ");
+        if (requestDto.getEndTime().isBefore(requestDto.getStartTime())) {
+            throw new IllegalArgumentException("Thời gian kết thúc phải sau thời gian bắt đầu");
         }
 
-        // Kiểm tra thời gian hợp lệ
-        if (requestDto.getStartTime().isAfter(requestDto.getEndTime())) {
-            throw new IllegalArgumentException("Thời gian bắt đầu phải trước thời gian kết thúc");
-        }
-
-        // Kiểm tra trùng lặp thời gian với các phiên khác
-        List<SellingPhase> existingPhases = sellingPhaseRepository.findByEventId(eventId);
-        for (SellingPhase phase : existingPhases) {
-            if (requestDto.getStartTime().isBefore(phase.getEndTime()) &&
-                    requestDto.getEndTime().isAfter(phase.getStartTime())) {
-                throw new IllegalArgumentException("Thời gian phiên bán vé trùng với phiên khác");
+        // Kiểm tra thời gian trùng lặp chỉ với các phiên của cùng khu vực
+        if (requestDto.getAreaId() != null) {
+            List<SellingPhase> existingPhases = sellingPhaseRepository.findByEventIdAndAreaId(eventId, requestDto.getAreaId());
+            for (SellingPhase phase : existingPhases) {
+                if (requestDto.getStartTime().isBefore(phase.getEndTime()) &&
+                        requestDto.getEndTime().isAfter(phase.getStartTime())) {
+                    throw new IllegalArgumentException("Thời gian phiên bán vé trùng với phiên khác trong cùng khu vực");
+                }
             }
         }
 
-        // Tính tổng availableTickets và totalTickets của tất cả khu vực trong sự kiện
-        List<Area> areas = areaRepository.findAll().stream()
-                .filter(area -> area.getEventId().equals(eventId))
-                .collect(Collectors.toList());
-        int totalAvailableTickets = areas.stream().mapToInt(Area::getAvailableTickets).sum();
-        int totalTickets = areas.stream().mapToInt(Area::getTotalTickets).sum();
-
-        // Kiểm tra tickets_available không vượt quá totalTickets hoặc availableTickets
-        if (requestDto.getTicketsAvailable() > totalTickets) {
-            throw new IllegalArgumentException("Số vé của phiên bán (" + requestDto.getTicketsAvailable() +
-                    ") vượt quá tổng số vé của sự kiện (" + totalTickets + ")");
-        }
-        if (requestDto.getTicketsAvailable() > totalAvailableTickets) {
-            throw new IllegalArgumentException("Số vé của phiên bán (" + requestDto.getTicketsAvailable() +
-                    ") vượt quá số vé còn lại của sự kiện (" + totalAvailableTickets + ")");
-        }
-
-        // Kiểm tra tổng tickets_available của các phiên bán không vượt quá totalTickets hoặc availableTickets
-        int totalPhaseTickets = existingPhases.stream().mapToInt(SellingPhase::getTicketsAvailable).sum();
-        int newTotalPhaseTickets = totalPhaseTickets + requestDto.getTicketsAvailable();
-
-        if (newTotalPhaseTickets > totalTickets) {
-            throw new IllegalArgumentException("Tổng số vé của các phiên bán vượt quá tổng số vé của sự kiện");
-        }
-        if (newTotalPhaseTickets > totalAvailableTickets) {
-            throw new IllegalArgumentException("Tổng số vé của các phiên bán vượt quá số vé còn lại của sự kiện");
+        // Kiểm tra tổng số vé khả dụng của các phiên bán vé cho khu vực
+        if (requestDto.getAreaId() != null) {
+            Area area = areaRepository.findById(requestDto.getAreaId())
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy khu vực"));
+            if (!area.getEventId().equals(eventId)) {
+                throw new IllegalArgumentException("Khu vực không thuộc sự kiện này");
+            }
+            List<SellingPhase> phasesForArea = sellingPhaseRepository.findByEventIdAndAreaId(eventId, requestDto.getAreaId());
+            int totalAllocatedTickets = phasesForArea.stream().mapToInt(SellingPhase::getTicketsAvailable).sum();
+            if (totalAllocatedTickets + requestDto.getTicketsAvailable() > area.getTotalTickets()) {
+                throw new IllegalArgumentException("Tổng số vé của các phiên bán vượt quá số vé của khu vực");
+            }
+        } else {
+            List<Area> areas = areaRepository.findAll().stream()
+                    .filter(area -> area.getEventId().equals(eventId))
+                    .collect(Collectors.toList());
+            int totalAvailableTickets = areas.stream().mapToInt(Area::getTotalTickets).sum();
+            List<SellingPhase> phasesForEvent = sellingPhaseRepository.findByEventId(eventId);
+            int totalAllocatedTickets = phasesForEvent.stream().mapToInt(SellingPhase::getTicketsAvailable).sum();
+            if (totalAllocatedTickets + requestDto.getTicketsAvailable() > totalAvailableTickets) {
+                throw new IllegalArgumentException("Tổng số vé của các phiên bán vượt quá số vé của sự kiện");
+            }
         }
 
         SellingPhase phase = new SellingPhase();
         phase.setEventId(eventId);
+        phase.setAreaId(requestDto.getAreaId());
         phase.setStartTime(requestDto.getStartTime());
         phase.setEndTime(requestDto.getEndTime());
         phase.setTicketsAvailable(requestDto.getTicketsAvailable());
@@ -434,10 +452,18 @@ public class EventService {
         // Xác định trạng thái phiên dựa trên thời gian thực
         String status = determinePhaseStatus(savedPhase.getStartTime(), savedPhase.getEndTime());
         redisTemplate.opsForValue().set("phase:status:" + savedPhase.getPhaseId(), status);
+        String areaName = null;
+        if (savedPhase.getAreaId() != null) {
+            Area area = areaRepository.findById(savedPhase.getAreaId())
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy khu vực"));
+            areaName = area.getName();
+        }
 
         return new SellingPhaseResponseDto(
                 savedPhase.getPhaseId(),
                 savedPhase.getEventId(),
+                savedPhase.getAreaId(),
+                areaName,
                 savedPhase.getStartTime(),
                 savedPhase.getEndTime(),
                 savedPhase.getTicketsAvailable(),
@@ -514,12 +540,14 @@ public class EventService {
     // Cập nhật phiên bán vé (Organizer và Admin)
     @Transactional
     public SellingPhaseResponseDto updateSellingPhase(Integer phaseId, SellingPhaseRequestDto requestDto) {
+        //Tìm phiên bán vé theo phaseId
         SellingPhase phase = sellingPhaseRepository.findById(phaseId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy phiên bán vé"));
 
         Event event = eventRepository.findById(phase.getEventId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sự kiện"));
 
+        //Kiểm tra quyền truy cập
         String userIdStr = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Integer userId = Integer.parseInt(userIdStr);
         String role = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
@@ -529,74 +557,73 @@ public class EventService {
             throw new RuntimeException("Bạn không có quyền cập nhật phiên bán vé này");
         }
 
-        // Kiểm tra thời gian hợp lệ
-        if (requestDto.getStartTime().isAfter(requestDto.getEndTime())) {
-            throw new IllegalArgumentException("Thời gian bắt đầu phải trước thời gian kết thúc");
-        }
-
-        //Kiểm tra cập nhật thời gian không trong quá khứ
-        if (requestDto.getStartTime().isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException("Thời gian bắt đầu không được trong quá khứ");
-        }
-        if (requestDto.getEndTime().isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException("Thời gian kết thúc không được trong quá khứ");
-        }
-
-        // Kiểm tra trùng lặp thời gian
-        List<SellingPhase> otherPhases = sellingPhaseRepository.findByEventId(phase.getEventId()).stream()
-                .filter(p -> !p.getPhaseId().equals(phaseId))
-                .collect(Collectors.toList());
-        for (SellingPhase p : otherPhases) {
-            if (requestDto.getStartTime().isBefore(p.getEndTime()) &&
-                    requestDto.getEndTime().isAfter(p.getStartTime())) {
-                throw new IllegalArgumentException("Thời gian phiên bán vé trùng với phiên khác");
+        // Kiểm tra thời gian trùng lặp khi cập nhật chỉ với các phiên của cùng khu vực
+        if (requestDto.getAreaId() != null) {
+            List<SellingPhase> otherPhases = sellingPhaseRepository.findByEventIdAndAreaId(phase.getEventId(), requestDto.getAreaId()).stream()
+                    .filter(p -> !p.getPhaseId().equals(phaseId))
+                    .collect(Collectors.toList());
+            for (SellingPhase p : otherPhases) {
+                if (requestDto.getStartTime().isBefore(p.getEndTime()) &&
+                        requestDto.getEndTime().isAfter(p.getStartTime())) {
+                    throw new IllegalArgumentException("Thời gian phiên bán vé trùng với phiên khác trong cùng khu vực");
+                }
             }
         }
 
-        // Tính tổng availableTickets và totalTickets của tất cả khu vực trong sự kiện
-        List<Area> areas = areaRepository.findAll().stream()
-                .filter(area -> area.getEventId().equals(phase.getEventId()))
-                .collect(Collectors.toList());
-        int totalAvailableTickets = areas.stream().mapToInt(Area::getAvailableTickets).sum();
-        int totalTickets = areas.stream().mapToInt(Area::getTotalTickets).sum();
-
-        // Kiểm tra tickets_available không vượt quá totalTickets hoặc availableTickets
-        if (requestDto.getTicketsAvailable() > totalTickets) {
-            throw new IllegalArgumentException("Số vé của phiên bán (" + requestDto.getTicketsAvailable() +
-                    ") vượt quá tổng số vé của sự kiện (" + totalTickets + ")");
+        // Kiểm tra tổng số vé khả dụng khi cập nhật
+        if (requestDto.getAreaId() != null) {
+            Area area = areaRepository.findById(requestDto.getAreaId())
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy khu vực"));
+            if (!area.getEventId().equals(phase.getEventId())) {
+                throw new IllegalArgumentException("Khu vực không thuộc sự kiện này");
+            }
+            List<SellingPhase> otherPhases = sellingPhaseRepository.findByEventIdAndAreaId(phase.getEventId(), requestDto.getAreaId()).stream()
+                    .filter(p -> !p.getPhaseId().equals(phaseId))
+                    .collect(Collectors.toList());
+            int totalAllocatedTickets = otherPhases.stream().mapToInt(SellingPhase::getTicketsAvailable).sum();
+            if (totalAllocatedTickets + requestDto.getTicketsAvailable() > area.getTotalTickets()) {
+                throw new IllegalArgumentException("Tổng số vé của các phiên bán vượt quá số vé của khu vực");
+            }
+            phase.setAreaId(requestDto.getAreaId());
+        } else {
+            phase.setAreaId(null);
+            List<Area> areas = areaRepository.findAll().stream()
+                    .filter(area -> area.getEventId().equals(phase.getEventId()))
+                    .collect(Collectors.toList());
+            int totalAvailableTickets = areas.stream().mapToInt(Area::getTotalTickets).sum();
+            List<SellingPhase> otherPhases = sellingPhaseRepository.findByEventId(phase.getEventId()).stream()
+                    .filter(p -> !p.getPhaseId().equals(phaseId))
+                    .collect(Collectors.toList());
+            int totalAllocatedTickets = otherPhases.stream().mapToInt(SellingPhase::getTicketsAvailable).sum();
+            if (totalAllocatedTickets + requestDto.getTicketsAvailable() > totalAvailableTickets) {
+                throw new IllegalArgumentException("Tổng số vé của các phiên bán vượt quá số vé của sự kiện");
+            }
         }
-        if (requestDto.getTicketsAvailable() > totalAvailableTickets) {
-            throw new IllegalArgumentException("Số vé của phiên bán (" + requestDto.getTicketsAvailable() +
-                    ") vượt quá số vé còn lại của sự kiện (" + totalAvailableTickets + ")");
-        }
 
-        // Tính tổng tickets_available của tất cả các phiên bán vé trừ phiên hiện tại
-        int totalOtherPhaseTickets = otherPhases.stream().mapToInt(SellingPhase::getTicketsAvailable).sum();
-        int newTotalPhaseTickets = totalOtherPhaseTickets + requestDto.getTicketsAvailable();
-
-        // Kiểm tra tổng mới không vượt quá totalTickets và availableTickets
-        if (newTotalPhaseTickets > totalTickets) {
-            throw new IllegalArgumentException("Tổng số vé của các phiên bán (" + newTotalPhaseTickets +
-                    ") vượt quá tổng số vé của sự kiện (" + totalTickets + ")");
-        }
-        if (newTotalPhaseTickets > totalAvailableTickets) {
-            throw new IllegalArgumentException("Tổng số vé của các phiên bán (" + newTotalPhaseTickets +
-                    ") vượt quá số vé còn lại của sự kiện (" + totalAvailableTickets + ")");
-        }
-
-        // Cập nhật thông tin phiên bán vé
+        // Cập nhật các trường khác
         phase.setStartTime(requestDto.getStartTime());
         phase.setEndTime(requestDto.getEndTime());
         phase.setTicketsAvailable(requestDto.getTicketsAvailable());
         phase.setUpdatedAt(LocalDateTime.now());
+
+        // Lưu thay đổi
         SellingPhase updatedPhase = sellingPhaseRepository.save(phase);
 
+        // Xác định trạng thái và lấy tên khu vực
         String status = determinePhaseStatus(updatedPhase.getStartTime(), updatedPhase.getEndTime());
-        redisTemplate.opsForValue().set("phase:status:" + updatedPhase.getPhaseId(), status);
+        String areaName = null;
+        if (updatedPhase.getAreaId() != null) {
+            Area area = areaRepository.findById(updatedPhase.getAreaId())
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy khu vực"));
+            areaName = area.getName();
+        }
 
+        // Trả về DTO với thông tin đầy đủ
         return new SellingPhaseResponseDto(
                 updatedPhase.getPhaseId(),
                 updatedPhase.getEventId(),
+                updatedPhase.getAreaId(),
+                areaName,
                 updatedPhase.getStartTime(),
                 updatedPhase.getEndTime(),
                 updatedPhase.getTicketsAvailable(),

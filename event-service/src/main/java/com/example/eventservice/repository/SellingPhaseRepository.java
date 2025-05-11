@@ -6,4 +6,5 @@ import java.util.List;
 
 public interface SellingPhaseRepository extends JpaRepository<SellingPhase, Integer> {
     List<SellingPhase> findByEventId(Integer eventId);
+    List<SellingPhase> findByEventIdAndAreaId(Integer eventId, Integer areaId);
 }

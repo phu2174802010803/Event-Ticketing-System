@@ -1,8 +1,10 @@
 package com.example.eventservice.dto;
-import jakarta.validation.constraints.NotNull;
+
 import lombok.Data;
+import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDateTime;
+
 @Data
 public class SellingPhaseRequestDto {
     @NotNull(message = "Thời gian bắt đầu là bắt buộc")
@@ -11,6 +13,10 @@ public class SellingPhaseRequestDto {
     @NotNull(message = "Thời gian kết thúc là bắt buộc")
     private LocalDateTime endTime;
 
-    @NotNull(message = "Số lượng vé là bắt buộc")
+    @NotNull(message = "Số vé khả dụng là bắt buộc")
     private Integer ticketsAvailable;
+
+    private Integer areaId;
+
+    private String areaName;
 }

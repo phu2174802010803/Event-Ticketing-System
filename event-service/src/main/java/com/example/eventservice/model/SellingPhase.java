@@ -17,6 +17,9 @@ public class SellingPhase {
     @Column(name = "event_id", nullable = false)
     private Integer eventId;
 
+    @Column(name = "area_id")
+    private Integer areaId;
+
     @Column(name = "start_time", nullable = false)
     private LocalDateTime startTime;
 
