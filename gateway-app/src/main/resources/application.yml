@@ -24,13 +24,17 @@ spring:
                   rewriteFunction: "#{@cacheRewriteFunction}"
             - name: RequestRateLimiter
               args:
-                redis-rate-limiter.replenishRate: 10   # Tăng lên 10 yêu cầu/phút
-                redis-rate-limiter.burstCapacity: 20    # Tăng lên 20 yêu cầu đột biến
+                redis-rate-limiter.replenishRate: 1000   # Tăng lên 1000 yêu cầu/phút
+                redis-rate-limiter.burstCapacity: 2000   # Tăng lên 2000 yêu cầu đột biến
                 key-resolver: "#{@remoteAddrKeyResolver}"
         - id: ticket-service
           uri: http://localhost:8084
           predicates:
             - Path=/api/tickets/**, /api/queue/**
+        - id: payment-service
+          uri: http://localhost:8086
+          predicates:
+              - Path=/api/payments/**
       default-filters:
         - AuthFilter
       globalcors:
@@ -48,6 +52,10 @@ spring:
             allowCredentials: true
             maxAge: 3600
 server:
+  tomcat:
+    threads:
+      max: 500
+      min-spare: 50
   port: 8080
   http2:
     enabled: true                               # Bật HTTP/2
