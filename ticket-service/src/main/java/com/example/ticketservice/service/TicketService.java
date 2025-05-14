@@ -1,16 +1,35 @@
 package com.example.ticketservice.service;
 
 import com.example.ticketservice.dto.*;
+import com.example.ticketservice.model.Ticket;
+import com.example.ticketservice.repository.TicketRepository;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.WriterException;
+import com.google.zxing.client.j2se.MatrixToImageWriter;
+import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.QRCodeWriter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.http.*;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
-
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.Base64;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Service
 public class TicketService {
@@ -19,10 +38,24 @@ public class TicketService {
     private EventClient eventClient;
 
     @Autowired
+    private TicketRepository ticketRepository;
+
+    @Autowired
+    private AzureBlobStorageService azureBlobStorageService;
+
+    @Autowired
     private RedisTemplate<String, String> redisTemplate;
 
     @Autowired
     private RestTemplate restTemplate;
+
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
+
+    @Value("${payment.service.url}")
+    private String paymentServiceUrl;
+
+    private static final Logger logger = LoggerFactory.getLogger(TicketService.class);
 
     private static final int MAX_TICKETS_PER_TRANSACTION = 4;
     private static final int HOLD_TIME_MINUTES = 10;
@@ -79,10 +112,15 @@ public class TicketService {
             }
         }
 
+        // Tạo holdKey và transactionId
+        String holdKey = "ticket:hold:" + userId + ":" + request.getEventId() + ":" + request.getAreaId() + ":" + request.getPhaseId();
+        String transactionId = UUID.randomUUID().toString();
+        String transactionKey = "transaction:" + transactionId;
 
-        // Tạm giữ vé trong Redis
-        String holdKey = "ticket:hold:" + userId + ":" + request.getEventId() + ":" + request.getAreaId();
-        redisTemplate.opsForValue().set(holdKey, String.valueOf(request.getQuantity()), HOLD_TIME_MINUTES, TimeUnit.MINUTES);
+        // Tạm giữ vé trong Redis với định dạng "quantity:price"
+        String holdValue = request.getQuantity() + ":" + areaDetail.getPrice();
+        redisTemplate.opsForValue().set(holdKey, holdValue, HOLD_TIME_MINUTES, TimeUnit.MINUTES);
+        redisTemplate.opsForValue().set(transactionKey, holdKey, HOLD_TIME_MINUTES, TimeUnit.MINUTES);
 
         // Giảm số vé tạm thời
         String availableKey = "area:available:" + request.getEventId() + ":" + request.getAreaId();
@@ -91,17 +129,18 @@ public class TicketService {
         if (newAvailable < 0) {
             redisTemplate.opsForValue().increment(availableKey, request.getQuantity());
             redisTemplate.delete(holdKey);
+            redisTemplate.delete(transactionKey);
             throw new IllegalArgumentException("Không đủ vé do người dùng khác đã chọn");
         }
 
-        // Tạo transactionId
-        String transactionId = UUID.randomUUID().toString();
+        // Trả về response
         TicketSelectionResponse response = new TicketSelectionResponse();
         response.setTransactionId(transactionId);
         response.setMessage("Chọn vé thành công, vui lòng thanh toán trong " + HOLD_TIME_MINUTES + " phút");
         return response;
     }
 
+    @Transactional
     public TicketPurchaseResponse purchaseTickets(TicketPurchaseRequest request, Integer userId, String token) {
         String holdPattern = "ticket:hold:" + userId + ":*";
         Set<String> holdKeys = redisTemplate.keys(holdPattern);
@@ -110,39 +149,161 @@ public class TicketService {
         }
 
         String holdKey = holdKeys.iterator().next();
-        String quantityStr = redisTemplate.opsForValue().get(holdKey);
-        if (quantityStr == null) {
+        String holdData = redisTemplate.opsForValue().get(holdKey);
+        if (holdData == null) {
             throw new IllegalArgumentException("Phiên tạm giữ vé đã hết hạn");
         }
 
         String[] parts = holdKey.split(":");
         Integer eventId = Integer.parseInt(parts[2]);
         Integer areaId = Integer.parseInt(parts[3]);
-        Integer quantity = Integer.parseInt(quantityStr);
+        Integer phaseId = Integer.parseInt(parts[4]);
+        Integer quantity = Integer.parseInt(holdData.split(":")[0]);
+        Double price = Double.parseDouble(holdData.split(":")[1]);
+        Double totalAmount = quantity * price;
 
-        //Bổ sung logic thanh toán ở đây (payment service)
+        // Gửi yêu cầu thanh toán đến Payment Service
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + token);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        PaymentRequest paymentRequest = new PaymentRequest();
+        paymentRequest.setTransactionId(request.getTransactionId());
+        paymentRequest.setAmount(totalAmount);
+        paymentRequest.setPaymentMethod("bank");
+        paymentRequest.setEventId(eventId);
+        HttpEntity<PaymentRequest> entity = new HttpEntity<>(paymentRequest, headers);
 
-        // Giả lập thanh toán thành công
-        String ticketCode = UUID.randomUUID().toString();
-        redisTemplate.delete(holdKey);
+        // Gửi yêu cầu với RestTemplate
+        ResponseEntity<PaymentResponse> responseEntity = restTemplate.exchange(
+                paymentServiceUrl + "/api/payments",
+                HttpMethod.POST,
+                entity,
+                PaymentResponse.class
+        );
 
+        PaymentResponse paymentResponse = responseEntity.getBody();
         TicketPurchaseResponse response = new TicketPurchaseResponse();
-        response.setTicketCode(ticketCode);
-        response.setMessage("Thanh toán thành công, mã vé của bạn là " + ticketCode);
+        response.setPaymentUrl(paymentResponse.getPaymentUrl());
+        response.setMessage("Vui lòng thanh toán qua VNPay");
         return response;
     }
 
-    // Giải phóng vé khi hết thời gian hoặc thanh toán thất bại
+    @Transactional
+    public void confirmPayment(String transactionId, String status, Integer userId, Integer eventId) {
+        // Lấy holdKey từ transactionId
+        String transactionKey = "transaction:" + transactionId;
+        String holdKey = redisTemplate.opsForValue().get(transactionKey);
+
+        if (holdKey == null) {
+            logger.warn("Không tìm thấy holdKey cho transactionId: {}", transactionId);
+            return;
+        }
+
+        String holdData = redisTemplate.opsForValue().get(holdKey);
+        if (holdData == null) {
+            logger.warn("HoldKey đã hết hạn cho transactionId: {}", transactionId);
+            return;
+        }
+
+        // Trích xuất thông tin từ holdData và holdKey
+        String[] holdParts = holdKey.split(":");
+        Integer areaId = Integer.parseInt(holdParts[3]);
+        Integer phaseId = Integer.parseInt(holdParts[4]);
+        String[] dataParts = holdData.split(":");
+        Integer quantity = Integer.parseInt(dataParts[0]);
+        Double price = Double.parseDouble(dataParts[1]);
+
+        if ("completed".equals(status)) {
+            for (int i = 0; i < quantity; i++) {
+                Ticket ticket = new Ticket();
+                ticket.setEventId(eventId);
+                ticket.setAreaId(areaId);
+                ticket.setPhaseId(phaseId);
+                ticket.setUserId(userId);
+                ticket.setStatus("sold");
+                ticket.setPurchaseDate(LocalDateTime.now());
+                ticket.setPrice(price);
+                String qrCodeUrl = generateQRCode(userId, eventId, areaId);
+                ticket.setTicketCode(qrCodeUrl);
+                ticketRepository.save(ticket);
+            }
+            redisTemplate.delete(holdKey);
+            redisTemplate.delete(transactionKey);
+            logger.info("Đã lưu {} vé cho userId: {}, eventId: {}", quantity, userId, eventId);
+        } else {
+            releaseHeldTickets(holdKey);
+            redisTemplate.delete(transactionKey);
+            logger.info("Đã giải phóng vé cho transactionId: {}", transactionId);
+        }
+
+        // Cập nhật số vé khả dụng trong Redis
+        String availableKey = "area:available:" + eventId + ":" + areaId;
+        String availableTickets = redisTemplate.opsForValue().get(availableKey);
+        messagingTemplate.convertAndSend("/topic/tickets/" + eventId + "/" + areaId,
+                new TicketUpdateResponse(areaId, availableTickets, "Cập nhật số vé thành công"));
+    }
+
+    public List<TicketHistoryResponse> getTicketHistory(Integer userId, String status, int page, int size) {
+        Page<Ticket> tickets = ticketRepository.findByUserIdAndStatus(userId, status, PageRequest.of(page, size));
+        return tickets.stream().map(ticket -> new TicketHistoryResponse(
+                ticket.getTicketId(),
+                "Event " + ticket.getEventId(),
+                "Area " + ticket.getAreaId(),
+                ticket.getStatus(),
+                ticket.getTicketCode(),
+                ticket.getPurchaseDate().toString()
+        )).collect(Collectors.toList());
+    }
+
+    public TicketQRResponse getTicketQR(Integer ticketId, Integer userId) {
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .filter(t -> t.getUserId().equals(userId))
+                .orElseThrow(() -> new IllegalArgumentException("Vé không tồn tại hoặc không thuộc về bạn"));
+        return new TicketQRResponse(ticket.getTicketCode());
+    }
+
+    @Transactional
+    public TicketScanResponse scanTicket(TicketScanRequest request, String role) {
+        if (!"ORGANIZER".equals(role) && !"ADMIN".equals(role)) {
+            throw new IllegalStateException("Chỉ Organizer hoặc Admin mới có quyền quét vé");
+        }
+        Ticket ticket = ticketRepository.findByTicketCode(request.getQrCode())
+                .orElseThrow(() -> new IllegalArgumentException("Mã QR không hợp lệ"));
+        if ("used".equals(ticket.getStatus())) {
+            return new TicketScanResponse("Vé đã được sử dụng", "used");
+        }
+        ticket.setStatus("used");
+        ticketRepository.save(ticket);
+        return new TicketScanResponse("Vé hợp lệ", "used");
+    }
+
     public void releaseHeldTickets(String holdKey) {
-        String quantityStr = redisTemplate.opsForValue().get(holdKey);
-        if (quantityStr != null) {
-            int quantity = Integer.parseInt(quantityStr);
+        String holdData = redisTemplate.opsForValue().get(holdKey);
+        if (holdData != null) {
             String[] parts = holdKey.split(":");
             Integer eventId = Integer.parseInt(parts[2]);
             Integer areaId = Integer.parseInt(parts[3]);
+            Integer quantity = Integer.parseInt(holdData.split(":")[0]);
             String availableKey = "area:available:" + eventId + ":" + areaId;
             redisTemplate.opsForValue().increment(availableKey, quantity);
             redisTemplate.delete(holdKey);
+            messagingTemplate.convertAndSend("/topic/tickets/" + eventId + "/" + areaId,
+                    new TicketUpdateResponse(areaId, redisTemplate.opsForValue().get(availableKey), "Vé đã được giải phóng"));
+        }
+    }
+
+    public String generateQRCode(Integer userId, Integer eventId, Integer areaId) {
+        String qrData = userId + ":" + eventId + ":" + areaId + ":" + System.currentTimeMillis();
+        QRCodeWriter qrCodeWriter = new QRCodeWriter();
+        try {
+            BitMatrix bitMatrix = qrCodeWriter.encode(qrData, BarcodeFormat.QR_CODE, 200, 200);
+            ByteArrayOutputStream pngOutputStream = new ByteArrayOutputStream();
+            MatrixToImageWriter.writeToStream(bitMatrix, "PNG", pngOutputStream);
+            byte[] qrCodeBytes = pngOutputStream.toByteArray();
+            String fileName = "qr_" + UUID.randomUUID().toString() + ".png";
+            return azureBlobStorageService.uploadQRCode(qrCodeBytes, fileName);
+        } catch (WriterException | IOException e) {
+            throw new RuntimeException("Không thể tạo mã QR: " + e.getMessage());
         }
     }
 }

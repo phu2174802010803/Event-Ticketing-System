@@ -28,6 +28,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
+        String path = request.getRequestURI();
+
+        // Bỏ qua xác thực cho endpoint /api/tickets/confirm
+        if ("/api/tickets/confirm".equals(path)) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         String authorizationHeader = request.getHeader("Authorization");
 
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
@@ -56,7 +64,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return;
         }
-
         chain.doFilter(request, response);
     }
 

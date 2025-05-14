@@ -1,9 +1,6 @@
 package com.example.ticketservice.controller;
 
-import com.example.ticketservice.dto.TicketPurchaseRequest;
-import com.example.ticketservice.dto.TicketPurchaseResponse;
-import com.example.ticketservice.dto.TicketSelectionRequest;
-import com.example.ticketservice.dto.TicketSelectionResponse;
+import com.example.ticketservice.dto.*;
 import com.example.ticketservice.service.TicketService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +9,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/tickets")
@@ -45,8 +45,74 @@ public class TicketController {
             @Valid @RequestBody TicketPurchaseRequest request,
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authorizationHeader) {
         Integer userId = Integer.parseInt((String) SecurityContextHolder.getContext().getAuthentication().getPrincipal());
-        String token = authorizationHeader.substring(7); // Loại bỏ "Bearer "
+        String token = authorizationHeader.substring(7);
         TicketPurchaseResponse response = ticketService.purchaseTickets(request, userId, token);
+        return ResponseEntity.ok(response); // Trả về 200 OK với body JSON
+    }
+
+    @PostMapping("/confirm")
+    public ResponseEntity<String> confirmPayment(@RequestBody Map<String, String> confirmation) {
+        String transactionId = confirmation.get("transactionId");
+        String status = confirmation.get("status");
+        String userIdStr = confirmation.get("userId");
+        String eventIdStr = confirmation.get("eventId");
+
+        // Kiểm tra dữ liệu đầu vào
+        if (transactionId == null || status == null || userIdStr == null || eventIdStr == null) {
+            return ResponseEntity.badRequest().body("Thiếu thông tin cần thiết trong request");
+        }
+
+        // Chuyển đổi sang kiểu số
+        Integer userId = Integer.parseInt(userIdStr);
+        Integer eventId = Integer.parseInt(eventIdStr);
+
+        // Gọi TicketService với đầy đủ thông tin
+        ticketService.confirmPayment(transactionId, status, userId, eventId);
+        return ResponseEntity.ok("Xác nhận thanh toán thành công");
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<List<TicketHistoryResponse>> getTicketHistory(
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Integer userId = Integer.parseInt((String) SecurityContextHolder.getContext().getAuthentication().getPrincipal());
+        List<TicketHistoryResponse> history = ticketService.getTicketHistory(userId, status, page, size);
+        return ResponseEntity.ok(history);
+    }
+
+    @GetMapping("/{ticketId}/qr")
+    public ResponseEntity<TicketQRResponse> getTicketQR(@PathVariable Integer ticketId) {
+        Integer userId = Integer.parseInt((String) SecurityContextHolder.getContext().getAuthentication().getPrincipal());
+        TicketQRResponse response = ticketService.getTicketQR(ticketId, userId);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/admin/history")
+    public ResponseEntity<List<TicketHistoryResponse>> getAllTickets(
+            @RequestParam(required = false) Integer eventId,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        String role = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                .findFirst().get().getAuthority().replace("ROLE_", "");
+        if (!"ADMIN".equals(role)) {
+            throw new IllegalStateException("Chỉ Admin mới có quyền truy cập");
+        }
+        // Logic tra cứu từ ticket_db (giả lập)
+        return ResponseEntity.ok(List.of(new TicketHistoryResponse(1, "Hòa nhạc XYZ", "Khu A", "sold", "qr_code", "2024-10-01T12:00:00")));
+    }
+
+    @PostMapping("/scan")
+    public ResponseEntity<TicketScanResponse> scanTicket(
+            @RequestBody TicketScanRequest request,
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String authorizationHeader) {
+        String role = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                .findFirst().get().getAuthority().replace("ROLE_", "");
+        if (!"ORGANIZER".equals(role) && !"ADMIN".equals(role)) {
+            throw new IllegalStateException("Chỉ Organizer hoặc Admin mới có quyền quét vé");
+        }
+        TicketScanResponse response = ticketService.scanTicket(request, role);
         return ResponseEntity.ok(response);
     }
 }

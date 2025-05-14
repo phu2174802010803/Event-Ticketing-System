@@ -3,8 +3,8 @@ package com.example.ticketservice.dto;
 import lombok.Data;
 
 @Data
-public class TicketPurchaseResponse {
-    private String ticketCode;
+public class PaymentResponse {
     private String paymentUrl;
+    private String status;
     private String message;
 }

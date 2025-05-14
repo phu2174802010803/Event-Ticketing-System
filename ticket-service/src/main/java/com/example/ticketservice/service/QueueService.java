@@ -3,6 +3,7 @@ package com.example.ticketservice.service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.data.redis.connection.stream.StreamRecords;
 
@@ -17,6 +18,8 @@ public class QueueService {
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
 
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
 
     private static final int MAX_ACTIVE_USERS = 1; // Giới hạn 2 người dùng đồng thời
     private static final int MAX_QUEUE_SIZE = 1;   // Hàng đợi 1000 người
@@ -27,10 +30,8 @@ public class QueueService {
     public boolean canJoinQueue(Integer eventId) {
         String activeKey = "active:" + eventId;
         String queueKey = "queue:" + eventId;
-
         Long activeCount = redisTemplate.opsForZSet().size(activeKey);
-        Long queueSize = redisTemplate.opsForStream().size(queueKey);
-
+        Long queueSize = redisTemplate.opsForList().size(queueKey);
         return (activeCount != null && activeCount < MAX_ACTIVE_USERS) ||
                 (queueSize != null && queueSize < MAX_QUEUE_SIZE);
     }
@@ -54,17 +55,16 @@ public class QueueService {
             redisTemplate.opsForZSet().add(activeKey, userId.toString(), timestamp);
             redisTemplate.opsForValue().set(userActiveKey, "active", ACCESS_TIME_MINUTES, TimeUnit.MINUTES);
             redisTemplate.opsForValue().set(userKey, "active");
+            messagingTemplate.convertAndSend("/topic/queue/" + eventId, "User " + userId + " can access now");
             return "Bạn có thể truy cập ngay lập tức";
         } else {
-            Long queueSize = redisTemplate.opsForStream().size(queueKey);
+            Long queueSize = redisTemplate.opsForList().size(queueKey);
             if (queueSize != null && queueSize >= MAX_QUEUE_SIZE) {
                 return "Hàng đợi đã đầy, vui lòng chờ thông báo";
             }
-            Map<String, String> fields = new HashMap<>();
-            fields.put("userId", userId.toString());
-            redisTemplate.opsForStream().add(StreamRecords.newRecord().in(queueKey).ofMap(fields));
+            redisTemplate.opsForList().rightPush(queueKey, userId.toString());
             redisTemplate.opsForValue().set(userKey, "queue", CONFIRMATION_INTERVAL_MINUTES, TimeUnit.MINUTES);
-            Long position = redisTemplate.opsForStream().size(queueKey);
+            Long position = redisTemplate.opsForList().size(queueKey);
             return "Bạn đang ở vị trí thứ " + position + " trong hàng đợi";
         }
     }
@@ -146,6 +146,7 @@ public class QueueService {
                 redisTemplate.opsForZSet().add(activeKey, nextUser, timestamp);
                 redisTemplate.opsForValue().set(userKey, "active");
                 redisTemplate.opsForValue().set(userActiveKey, "active", ACCESS_TIME_MINUTES, TimeUnit.MINUTES);
+                messagingTemplate.convertAndSend("/topic/queue/" + eventId, "User " + userId + " moved to active");
                 activeCount = redisTemplate.opsForZSet().size(activeKey);
             }
         }
