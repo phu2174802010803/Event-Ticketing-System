@@ -15,15 +15,19 @@ spring:
         - id: event-service-organizer
           uri: http://localhost:8083
           predicates:
-            - Path=/api/organizer/**
+            - Path=/api/organizer/events/**, /api/organizer/phases/**, /api/organizer/areas/**
         - id: event-service-admin
           uri: http://localhost:8083
           predicates:
-            - Path=/api/admin/**
-        - id: ticket-service
+            - Path=/api/admin/events/**, /api/admin/phases/**, /api/admin/areas/**, /api/admin/categories/**, /api/admin/map-templates/**
+        - id: ticket-service-organizer
           uri: http://localhost:8084
           predicates:
-            - Path=/api/admin/tickets/**, /api/organizer/tickets/**
+            - Path=/api/organizer/tickets/**
+        - id: ticket-service-admin
+          uri: http://localhost:8084
+          predicates:
+            - Path=/api/admin/tickets/**
       default-filters:
         - AuthFilter
       globalcors:
