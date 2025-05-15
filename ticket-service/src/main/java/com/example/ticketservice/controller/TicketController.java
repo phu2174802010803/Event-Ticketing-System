@@ -1,5 +1,6 @@
 package com.example.ticketservice.controller;
 
+import com.azure.core.annotation.Get;
 import com.example.ticketservice.dto.*;
 import com.example.ticketservice.service.TicketService;
 import jakarta.validation.Valid;
@@ -72,47 +73,19 @@ public class TicketController {
     }
 
     @GetMapping("/history")
-    public ResponseEntity<List<TicketHistoryResponse>> getTicketHistory(
+    public ResponseEntity<ResponseWrapper<List<TicketHistoryResponse>>> getTicketHistory(
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         Integer userId = Integer.parseInt((String) SecurityContextHolder.getContext().getAuthentication().getPrincipal());
-        List<TicketHistoryResponse> history = ticketService.getTicketHistory(userId, status, page, size);
-        return ResponseEntity.ok(history);
+        List<TicketHistoryResponse> history = ticketService.getTicketHistory(userId, status, page, size, "USER");
+        return ResponseEntity.ok(new ResponseWrapper<>("success", "Lịch sử vé của bạn", history));
     }
 
     @GetMapping("/{ticketId}/qr")
-    public ResponseEntity<TicketQRResponse> getTicketQR(@PathVariable Integer ticketId) {
+    public ResponseEntity<ResponseWrapper<TicketQRResponse>> getTicketQR(@PathVariable Integer ticketId) {
         Integer userId = Integer.parseInt((String) SecurityContextHolder.getContext().getAuthentication().getPrincipal());
-        TicketQRResponse response = ticketService.getTicketQR(ticketId, userId);
-        return ResponseEntity.ok(response);
-    }
-
-    @GetMapping("/admin/history")
-    public ResponseEntity<List<TicketHistoryResponse>> getAllTickets(
-            @RequestParam(required = false) Integer eventId,
-            @RequestParam(required = false) String status,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        String role = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
-                .findFirst().get().getAuthority().replace("ROLE_", "");
-        if (!"ADMIN".equals(role)) {
-            throw new IllegalStateException("Chỉ Admin mới có quyền truy cập");
-        }
-        // Logic tra cứu từ ticket_db (giả lập)
-        return ResponseEntity.ok(List.of(new TicketHistoryResponse(1, "Hòa nhạc XYZ", "Khu A", "sold", "qr_code", "2024-10-01T12:00:00")));
-    }
-
-    @PostMapping("/scan")
-    public ResponseEntity<TicketScanResponse> scanTicket(
-            @RequestBody TicketScanRequest request,
-            @RequestHeader(HttpHeaders.AUTHORIZATION) String authorizationHeader) {
-        String role = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
-                .findFirst().get().getAuthority().replace("ROLE_", "");
-        if (!"ORGANIZER".equals(role) && !"ADMIN".equals(role)) {
-            throw new IllegalStateException("Chỉ Organizer hoặc Admin mới có quyền quét vé");
-        }
-        TicketScanResponse response = ticketService.scanTicket(request, role);
-        return ResponseEntity.ok(response);
+        TicketQRResponse qrResponse = ticketService.getTicketQR(ticketId, userId, "USER");
+        return ResponseEntity.ok(new ResponseWrapper<>("success", "Mã QR của vé", qrResponse));
     }
 }

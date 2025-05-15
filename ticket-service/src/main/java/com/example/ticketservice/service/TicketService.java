@@ -73,6 +73,12 @@ public class TicketService {
             throw new IllegalArgumentException("Không tìm thấy khu vực");
         }
 
+        // Lấy thông tin sự kiện từ Event Service
+        EventInfo eventInfo = eventClient.getEventInfo(request.getEventId(), token);
+        if (eventInfo == null) {
+            throw new IllegalArgumentException("Không tìm thấy sự kiện");
+        }
+
         // Kiểm tra phiên bán vé
         SellingPhaseResponse[] phases = eventClient.getSellingPhases(request.getEventId(), token);
         SellingPhaseResponse activePhase = null;
@@ -117,8 +123,8 @@ public class TicketService {
         String transactionId = UUID.randomUUID().toString();
         String transactionKey = "transaction:" + transactionId;
 
-        // Tạm giữ vé trong Redis với định dạng "quantity:price"
-        String holdValue = request.getQuantity() + ":" + areaDetail.getPrice();
+        // Tạm giữ vé trong Redis với định dạng "quantity:price:event_name:area_name"
+        String holdValue = request.getQuantity() + ":" + areaDetail.getPrice() + ":" + eventInfo.getName() + ":" + areaDetail.getName(); //quantity:price:event_name:area_name
         redisTemplate.opsForValue().set(holdKey, holdValue, HOLD_TIME_MINUTES, TimeUnit.MINUTES);
         redisTemplate.opsForValue().set(transactionKey, holdKey, HOLD_TIME_MINUTES, TimeUnit.MINUTES);
 
@@ -133,9 +139,11 @@ public class TicketService {
             throw new IllegalArgumentException("Không đủ vé do người dùng khác đã chọn");
         }
 
-        // Trả về response
+        // Trả về response với event_name và area_name
         TicketSelectionResponse response = new TicketSelectionResponse();
         response.setTransactionId(transactionId);
+        response.setEventName(eventInfo.getName());
+        response.setAreaName(areaDetail.getName());
         response.setMessage("Chọn vé thành công, vui lòng thanh toán trong " + HOLD_TIME_MINUTES + " phút");
         return response;
     }
@@ -155,9 +163,7 @@ public class TicketService {
         }
 
         String[] parts = holdKey.split(":");
-        Integer eventId = Integer.parseInt(parts[2]);
-        Integer areaId = Integer.parseInt(parts[3]);
-        Integer phaseId = Integer.parseInt(parts[4]);
+        Integer eventId = Integer.parseInt(parts[3]); // "ticket:hold:<userId>:<eventId>:<areaId>:<phaseId>"
         Integer quantity = Integer.parseInt(holdData.split(":")[0]);
         Double price = Double.parseDouble(holdData.split(":")[1]);
         Double totalAmount = quantity * price;
@@ -207,29 +213,34 @@ public class TicketService {
 
         // Trích xuất thông tin từ holdData và holdKey
         String[] holdParts = holdKey.split(":");
-        Integer areaId = Integer.parseInt(holdParts[3]);
-        Integer phaseId = Integer.parseInt(holdParts[4]);
+        Integer actualEventId = Integer.parseInt(holdParts[3]);
+        Integer areaId = Integer.parseInt(holdParts[4]);
+        Integer phaseId = Integer.parseInt(holdParts[5]);
         String[] dataParts = holdData.split(":");
         Integer quantity = Integer.parseInt(dataParts[0]);
         Double price = Double.parseDouble(dataParts[1]);
+        String eventName = dataParts[2];
+        String areaName = dataParts[3];
 
         if ("completed".equals(status)) {
             for (int i = 0; i < quantity; i++) {
                 Ticket ticket = new Ticket();
-                ticket.setEventId(eventId);
+                ticket.setEventId(actualEventId);
                 ticket.setAreaId(areaId);
                 ticket.setPhaseId(phaseId);
                 ticket.setUserId(userId);
                 ticket.setStatus("sold");
                 ticket.setPurchaseDate(LocalDateTime.now());
                 ticket.setPrice(price);
-                String qrCodeUrl = generateQRCode(userId, eventId, areaId);
+                ticket.setEventName(eventName); // Lưu event_name
+                ticket.setAreaName(areaName);   // Lưu area_name
+                String qrCodeUrl = generateQRCode(userId, actualEventId, areaId);
                 ticket.setTicketCode(qrCodeUrl);
                 ticketRepository.save(ticket);
             }
             redisTemplate.delete(holdKey);
             redisTemplate.delete(transactionKey);
-            logger.info("Đã lưu {} vé cho userId: {}, eventId: {}", quantity, userId, eventId);
+            logger.info("Đã lưu {} vé cho userId: {}, eventId: {}", quantity, userId, actualEventId);
         } else {
             releaseHeldTickets(holdKey);
             redisTemplate.delete(transactionKey);
@@ -237,28 +248,75 @@ public class TicketService {
         }
 
         // Cập nhật số vé khả dụng trong Redis
-        String availableKey = "area:available:" + eventId + ":" + areaId;
+        String availableKey = "area:available:" + actualEventId + ":" + areaId;
         String availableTickets = redisTemplate.opsForValue().get(availableKey);
-        messagingTemplate.convertAndSend("/topic/tickets/" + eventId + "/" + areaId,
+        messagingTemplate.convertAndSend("/topic/tickets/" + actualEventId + "/" + areaId,
                 new TicketUpdateResponse(areaId, availableTickets, "Cập nhật số vé thành công"));
     }
 
-    public List<TicketHistoryResponse> getTicketHistory(Integer userId, String status, int page, int size) {
+    @Transactional(readOnly = true)
+    public List<TicketHistoryResponse> getTicketHistory(Integer userId, String status, int page, int size, String role) {
+        if (!"USER".equals(role)) {
+            throw new IllegalStateException("Chỉ người dùng mới có quyền truy cập lịch sử vé cá nhân");
+        }
         Page<Ticket> tickets = ticketRepository.findByUserIdAndStatus(userId, status, PageRequest.of(page, size));
-        return tickets.stream().map(ticket -> new TicketHistoryResponse(
-                ticket.getTicketId(),
-                "Event " + ticket.getEventId(),
-                "Area " + ticket.getAreaId(),
-                ticket.getStatus(),
-                ticket.getTicketCode(),
-                ticket.getPurchaseDate().toString()
-        )).collect(Collectors.toList());
+        return tickets.stream()
+                .map(ticket -> new TicketHistoryResponse(
+                        ticket.getTicketId(),
+                        ticket.getEventName(),
+                        ticket.getAreaName(),
+                        ticket.getStatus(),
+                        ticket.getTicketCode(),
+                        ticket.getPurchaseDate().toString()
+                ))
+                .collect(Collectors.toList());
     }
 
-    public TicketQRResponse getTicketQR(Integer ticketId, Integer userId) {
+    @Transactional(readOnly = true)
+    public List<TicketHistoryResponse> getTicketHistoryForOrganizer(Integer organizerId, Integer eventId, String status, int page, int size) {
+        // Kiểm tra quyền sở hữu sự kiện qua Event Service (giả định)
+        // eventClient.checkEventOwnership(organizerId, eventId);
+        Page<Ticket> tickets = ticketRepository.findByEventIdAndStatus(eventId, status, PageRequest.of(page, size));
+        return tickets.stream()
+                .map(ticket -> new TicketHistoryResponse(
+                        ticket.getTicketId(),
+                        ticket.getEventName(),
+                        ticket.getAreaName(),
+                        ticket.getStatus(),
+                        ticket.getTicketCode(),
+                        ticket.getPurchaseDate().toString()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<TicketHistoryResponse> getAllTickets(Integer eventId, String status, int page, int size, String role) {
+        if (!"ADMIN".equals(role)) {
+            throw new IllegalStateException("Chỉ Admin mới có quyền truy cập tất cả vé");
+        }
+        Page<Ticket> tickets = eventId != null ?
+                ticketRepository.findByEventIdAndStatus(eventId, status, PageRequest.of(page, size)) :
+                ticketRepository.findAll(PageRequest.of(page, size));
+        return tickets.stream()
+                .map(ticket -> new TicketHistoryResponse(
+                        ticket.getTicketId(),
+                        ticket.getEventName(),
+                        ticket.getAreaName(),
+                        ticket.getStatus(),
+                        ticket.getTicketCode(),
+                        ticket.getPurchaseDate().toString()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public TicketQRResponse getTicketQR(Integer ticketId, Integer userId, String role) {
         Ticket ticket = ticketRepository.findById(ticketId)
-                .filter(t -> t.getUserId().equals(userId))
-                .orElseThrow(() -> new IllegalArgumentException("Vé không tồn tại hoặc không thuộc về bạn"));
+                .orElseThrow(() -> new IllegalArgumentException("Vé không tồn tại"));
+        if ("USER".equals(role) && !ticket.getUserId().equals(userId)) {
+            throw new IllegalArgumentException("Vé không thuộc về bạn");
+        }
+        // Organizer/Admin không cần kiểm tra quyền sở hữu vé, chỉ cần vé tồn tại
         return new TicketQRResponse(ticket.getTicketCode());
     }
 
@@ -281,8 +339,8 @@ public class TicketService {
         String holdData = redisTemplate.opsForValue().get(holdKey);
         if (holdData != null) {
             String[] parts = holdKey.split(":");
-            Integer eventId = Integer.parseInt(parts[2]);
-            Integer areaId = Integer.parseInt(parts[3]);
+            Integer eventId = Integer.parseInt(parts[3]);
+            Integer areaId = Integer.parseInt(parts[4]);
             Integer quantity = Integer.parseInt(holdData.split(":")[0]);
             String availableKey = "area:available:" + eventId + ":" + areaId;
             redisTemplate.opsForValue().increment(availableKey, quantity);

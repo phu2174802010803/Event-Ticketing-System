@@ -1,6 +1,7 @@
 package com.example.ticketservice.service;
 
 import com.example.ticketservice.dto.AreaDetailDto;
+import com.example.ticketservice.dto.EventInfo;
 import com.example.ticketservice.dto.SellingPhaseResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -30,6 +31,15 @@ public class EventClient {
         headers.set("Authorization", "Bearer " + token);
         HttpEntity<String> entity = new HttpEntity<>(headers);
         ResponseEntity<SellingPhaseResponse[]> response = restTemplate.exchange(url, HttpMethod.GET, entity, SellingPhaseResponse[].class);
+        return response.getBody();
+    }
+
+    public EventInfo getEventInfo(Integer eventId, String token) {
+        String url = eventServiceUrl + "/api/events/public/" + eventId;
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + token);
+        HttpEntity<String> entity = new HttpEntity<>(headers);
+        ResponseEntity<EventInfo> response = restTemplate.exchange(url, HttpMethod.GET, entity, EventInfo.class);
         return response.getBody();
     }
 }
