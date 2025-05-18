@@ -1,6 +1,9 @@
 package com.example.identityservice.service;
 
+import com.example.identityservice.dto.UserCreateDto;
+import com.example.identityservice.dto.UserManagementResponseDto;
 import com.example.identityservice.dto.UserRegistrationDto;
+import com.example.identityservice.dto.UserUpdateDto;
 import com.example.identityservice.exception.RegistrationException;
 import com.example.identityservice.model.PasswordResetToken;
 import com.example.identityservice.model.Role;
@@ -8,6 +11,8 @@ import com.example.identityservice.model.User;
 import com.example.identityservice.repository.PasswordResetTokenRepository;
 import com.example.identityservice.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -31,6 +36,9 @@ public class UserService {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private EmailService emailService;
 
     @Autowired
     private RedisTemplate<String, String> redisTemplate; // Thêm RedisTemplate
@@ -148,5 +156,103 @@ public class UserService {
         redisTemplate.delete(key); // Xóa cache khi mật khẩu thay đổi
     }
 
+    public Page<UserManagementResponseDto> getAllUsers(Pageable pageable) {
+        Page<User> users = userRepository.findAll(pageable);
+        return users.map(this::convertToResponseDto);
+    }
+
+    public UserManagementResponseDto getUserById(Integer id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Người dùng không tồn tại"));
+        return convertToResponseDto(user);
+    }
+
+    @Transactional
+    public UserManagementResponseDto createUser(UserCreateDto dto) {
+        if (userRepository.existsByUsername(dto.getUsername())) {
+            throw new RegistrationException("Tên đăng nhập đã tồn tại");
+        }
+        if (userRepository.existsByEmail(dto.getEmail())) {
+            throw new RegistrationException("Email đã tồn tại");
+        }
+        User user = new User();
+        user.setUsername(dto.getUsername());
+        user.setPassword(passwordEncoder.encode(dto.getPassword()));
+        user.setRole(Role.valueOf(dto.getRole().toUpperCase()));
+        user.setEmail(dto.getEmail());
+        user.setFullName(dto.getFullName());
+        user.setPhone(dto.getPhone());
+        user.setAddress(dto.getAddress());
+        user.setActive(true);
+        User savedUser = userRepository.save(user);
+        return convertToResponseDto(savedUser);
+    }
+
+    @Transactional
+    public UserManagementResponseDto updateUser(Integer id, UserUpdateDto dto) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Người dùng không tồn tại"));
+        if (dto.getEmail() != null && !dto.getEmail().equals(user.getEmail())) {
+            if (userRepository.existsByEmail(dto.getEmail())) {
+                throw new RegistrationException("Email đã tồn tại");
+            }
+            user.setEmail(dto.getEmail());
+        }
+        if (dto.getFullName() != null) user.setFullName(dto.getFullName());
+        if (dto.getPhone() != null) user.setPhone(dto.getPhone());
+        if (dto.getAddress() != null) user.setAddress(dto.getAddress());
+        if (dto.getRole() != null) user.setRole(Role.valueOf(dto.getRole().toUpperCase()));
+        if (dto.getIsActive() != null) user.setActive(dto.getIsActive());
+        user.setUpdatedAt(LocalDateTime.now());
+        User updatedUser = userRepository.save(user);
+        return convertToResponseDto(updatedUser);
+    }
+
+    @Transactional
+    public void deleteUser(Integer id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Người dùng không tồn tại"));
+        userRepository.delete(user);
+    }
+
+    @Transactional
+    public void activateUser(Integer id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Người dùng không tồn tại"));
+        user.setActive(true);
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void deactivateUser(Integer id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Người dùng không tồn tại"));
+        user.setActive(false);
+        userRepository.save(user);
+        sendDeactivationEmail(user.getEmail());
+    }
+
+    private void sendDeactivationEmail(String email) {
+        try {
+            emailService.sendDeactivationEmail(email);
+        } catch (Exception e) {
+            throw new RuntimeException("Không thể gửi email thông báo: " + e.getMessage());
+        }
+    }
+
+    private UserManagementResponseDto convertToResponseDto(User user) {
+        UserManagementResponseDto dto = new UserManagementResponseDto();
+        dto.setUserId(user.getUserId());
+        dto.setUsername(user.getUsername());
+        dto.setEmail(user.getEmail());
+        dto.setRole(user.getRole().toString());
+        dto.setActive(user.isActive());
+        dto.setFullName(user.getFullName());
+        dto.setPhone(user.getPhone());
+        dto.setAddress(user.getAddress());
+        dto.setCreatedAt(user.getCreatedAt());
+        dto.setUpdatedAt(user.getUpdatedAt());
+        return dto;
+    }
 
 }

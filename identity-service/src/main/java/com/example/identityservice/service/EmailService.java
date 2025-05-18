@@ -30,4 +30,16 @@ public class EmailService {
         helper.setText(htmlContent, true);
         mailSender.send(message);
     }
+
+    public void sendDeactivationEmail(String to) throws MessagingException {
+        Context context = new Context();
+        String htmlContent = templateEngine.process("email/deactivationEmail", context);
+
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+        helper.setTo(to);
+        helper.setSubject("Tài khoản của bạn đã bị vô hiệu hóa");
+        helper.setText(htmlContent, true);
+        mailSender.send(message);
+    }
 }
