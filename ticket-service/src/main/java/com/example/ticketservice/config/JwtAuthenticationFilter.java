@@ -31,7 +31,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
 
         // Bỏ qua xác thực cho endpoint /api/tickets/confirm
-        if ("/api/tickets/confirm".equals(path)) {
+        if ("/api/tickets/confirm".equals(path) ||
+                (path.startsWith("/ws-native") && "Upgrade".equalsIgnoreCase(request.getHeader("Connection")))) {
             chain.doFilter(request, response);
             return;
         }

@@ -1,4 +1,3 @@
-// src/main/java/com/example/ticketservice/config/WebSocketConfig.java
 package com.example.ticketservice.config;
 
 import org.springframework.context.annotation.Configuration;
@@ -13,12 +12,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        config.enableSimpleBroker("/topic");
-        config.setApplicationDestinationPrefixes("/app");
+        config.enableSimpleBroker("/topic"); // Kích hoạt message broker cho topic
+        config.setApplicationDestinationPrefixes("/app"); // Prefix cho tin nhắn từ client
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.addEndpoint("/ws").setAllowedOrigins("http://localhost:5173").withSockJS();
+        registry.addEndpoint("/ws").setAllowedOrigins("*"); // WebSocket endpoint cho mobile
+        registry.addEndpoint("/ws-native").setAllowedOrigins("*"); // Thêm endpoint ws-native
     }
 }

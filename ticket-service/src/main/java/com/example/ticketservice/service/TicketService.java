@@ -139,6 +139,10 @@ public class TicketService {
             throw new IllegalArgumentException("Không đủ vé do người dùng khác đã chọn");
         }
 
+        // Gửi thông báo cập nhật số vé qua WebSocket
+        messagingTemplate.convertAndSend("/topic/tickets/" + request.getEventId() + "/" + request.getAreaId(),
+                "{\"availableTickets\": " + newAvailable + "}");
+
         // Trả về response với event_name và area_name
         TicketSelectionResponse response = new TicketSelectionResponse();
         response.setTransactionId(transactionId);
@@ -343,10 +347,12 @@ public class TicketService {
             Integer areaId = Integer.parseInt(parts[4]);
             Integer quantity = Integer.parseInt(holdData.split(":")[0]);
             String availableKey = "area:available:" + eventId + ":" + areaId;
+            Long newAvailable = redisTemplate.opsForValue().increment(availableKey, quantity);
             redisTemplate.opsForValue().increment(availableKey, quantity);
             redisTemplate.delete(holdKey);
+            // Gửi thông báo khi giải phóng vé
             messagingTemplate.convertAndSend("/topic/tickets/" + eventId + "/" + areaId,
-                    new TicketUpdateResponse(areaId, redisTemplate.opsForValue().get(availableKey), "Vé đã được giải phóng"));
+                    "{\"availableTickets\": " + newAvailable + "}");
         }
     }
 
