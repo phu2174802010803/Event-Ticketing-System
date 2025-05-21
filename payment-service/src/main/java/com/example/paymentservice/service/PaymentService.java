@@ -1,5 +1,6 @@
 package com.example.paymentservice.service;
 
+import com.example.paymentservice.dto.PaymentConfirmationEvent;
 import com.example.paymentservice.dto.PaymentRequest;
 import com.example.paymentservice.dto.PaymentResponse;
 import com.example.paymentservice.model.Transaction;
@@ -7,6 +8,7 @@ import com.example.paymentservice.repository.TransactionRepository;
 import com.example.paymentservice.util.VNPayUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -28,6 +30,9 @@ public class PaymentService {
     private TransactionRepository transactionRepository;
 
     @Autowired
+    private KafkaTemplate<String, PaymentConfirmationEvent> kafkaTemplate;
+
+    @Autowired
     private RestTemplate restTemplate;
 
     @Value("${vnpay.tmnCode}")
@@ -41,9 +46,6 @@ public class PaymentService {
 
     @Value("${vnpay.returnUrl}")
     private String vnpReturnUrl;
-
-    @Value("${ticket.service.url:http://localhost:8084}")
-    private String ticketServiceUrl;
 
     @Transactional
     public PaymentResponse processPayment(PaymentRequest request, String ipAddr) {
@@ -112,14 +114,12 @@ public class PaymentService {
 
         // Gửi yêu cầu xác nhận đến ticket service
         try {
-            Map<String, Object> confirmation = new HashMap<>();
-            confirmation.put("transactionId", transactionId);
-            confirmation.put("status", status);
-            confirmation.put("userId", transaction.getUserId()); // Thêm userId để xác thực ở ticket service
-            confirmation.put("eventId", transaction.getEventId()); // Thêm eventId
-
-            // Gửi thông tin đến ticket-service để cập nhật trạng thái vé
-            restTemplate.postForObject(ticketServiceUrl + "/api/tickets/confirm", confirmation, String.class);
+            PaymentConfirmationEvent event = new PaymentConfirmationEvent();
+            event.setTransactionId(transactionId);
+            event.setStatus(status);
+            event.setUserId(transaction.getUserId());
+            event.setEventId(transaction.getEventId());
+            kafkaTemplate.send("payment-confirmations", "paymentconfirmation", event);
         } catch (Exception e) {
             // Log lỗi nhưng không throw exception để không làm gián đoạn quy trình callback
             System.err.println("Lỗi khi gửi xác nhận đến ticket service: " + e.getMessage());
