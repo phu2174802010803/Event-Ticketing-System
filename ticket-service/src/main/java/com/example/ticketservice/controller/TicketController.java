@@ -1,6 +1,5 @@
 package com.example.ticketservice.controller;
 
-import com.azure.core.annotation.Get;
 import com.example.ticketservice.dto.*;
 import com.example.ticketservice.service.TicketService;
 import jakarta.validation.Valid;

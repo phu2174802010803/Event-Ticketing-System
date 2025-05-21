@@ -44,7 +44,7 @@ public class TicketService {
     private TicketRepository ticketRepository;
 
     @Autowired
-    private AzureBlobStorageService azureBlobStorageService;
+    private SpacesStorageService spacesStorageService;
 
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
@@ -418,7 +418,7 @@ public class TicketService {
             MatrixToImageWriter.writeToStream(bitMatrix, "PNG", pngOutputStream);
             byte[] qrCodeBytes = pngOutputStream.toByteArray();
             String fileName = "qr_" + UUID.randomUUID().toString() + ".png";
-            return azureBlobStorageService.uploadQRCode(qrCodeBytes, fileName);
+            return spacesStorageService.uploadQRCode(qrCodeBytes, fileName);
         } catch (WriterException | IOException e) {
             throw new RuntimeException("Không thể tạo mã QR: " + e.getMessage());
         }
