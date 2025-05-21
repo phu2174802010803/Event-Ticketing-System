@@ -2,7 +2,7 @@ package com.example.eventservice.controller;
 
 import com.example.eventservice.dto.*;
 import com.example.eventservice.model.Event;
-import com.example.eventservice.service.AzureBlobStorageService;
+import com.example.eventservice.service.SpacesStorageService;
 import com.example.eventservice.service.EventService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,7 +21,7 @@ public class AdminEventController {
     @Autowired
     private EventService eventService;
     @Autowired
-    private AzureBlobStorageService azureBlobStorageService;
+    private SpacesStorageService spacesStorageService;
 
     // Tạo sự kiện mới với hình ảnh
     @PostMapping(value = "/events", consumes = {"multipart/form-data"})
@@ -38,7 +38,7 @@ public class AdminEventController {
         // Nếu có file ảnh và sự kiện được tạo thành công, upload ảnh và cập nhật URL
         if (imageFile != null && !imageFile.isEmpty()) {
             try {
-                String imageUrl = azureBlobStorageService.uploadImage(imageFile);
+                String imageUrl = spacesStorageService.uploadImage(imageFile);
                 event.setImageUrl(imageUrl);
                 eventService.updateEventImageUrl(event.getEventId(), imageUrl);
             } catch (Exception e) {
@@ -48,7 +48,7 @@ public class AdminEventController {
         }
 
         if (bannerFile != null && !bannerFile.isEmpty()) {
-            String bannerUrl = azureBlobStorageService.uploadFile(bannerFile); // Sử dụng phương thức chung cho hình ảnh và video
+            String bannerUrl = spacesStorageService.uploadFile(bannerFile); // Sử dụng phương thức chung cho hình ảnh và video
             event.setBannerUrl(bannerUrl);
             eventService.updateEventBannerUrl(event.getEventId(), bannerUrl);
         }
@@ -98,15 +98,15 @@ public class AdminEventController {
         // Xử lý logic hình ảnh
         if (imageFile != null && !imageFile.isEmpty()) {
             // Upload ảnh mới và thay thế ảnh cũ
-            String imageUrl = azureBlobStorageService.uploadImage(imageFile);
+            String imageUrl = spacesStorageService.uploadImage(imageFile);
             if (oldImageUrl != null) {
-                azureBlobStorageService.deleteImage(oldImageUrl);
+                spacesStorageService.deleteImage(oldImageUrl);
             }
             requestDto.setImageUrl(imageUrl);
         } else if (Boolean.TRUE.equals(requestDto.getRemoveImage())) {
             // Gỡ ảnh: đặt imageUrl thành null và xóa ảnh cũ trên Azure
             if (oldImageUrl != null) {
-                azureBlobStorageService.deleteImage(oldImageUrl);
+                spacesStorageService.deleteImage(oldImageUrl);
             }
             requestDto.setImageUrl(null);
         } else {
@@ -117,16 +117,16 @@ public class AdminEventController {
         // Xử lý logic banner giống như image
         if (bannerFile != null && !bannerFile.isEmpty()) {
             // Upload banner mới và thay thế banner cũ
-            String bannerUrl = azureBlobStorageService.uploadFile(bannerFile);
+            String bannerUrl = spacesStorageService.uploadFile(bannerFile);
             if (oldBannerUrl != null) {
-                azureBlobStorageService.deleteImage(oldBannerUrl);
+                spacesStorageService.deleteImage(oldBannerUrl);
             }
             currentEvent.setBannerUrl(bannerUrl);
             eventService.updateEventBannerUrl(eventId, bannerUrl);
         } else if (Boolean.TRUE.equals(requestDto.getRemoveBanner())) {
             // Gỡ banner: đặt bannerUrl thành null và xóa banner cũ trên Azure
             if (oldBannerUrl != null) {
-                azureBlobStorageService.deleteImage(oldBannerUrl);
+                spacesStorageService.deleteImage(oldBannerUrl);
             }
             currentEvent.setBannerUrl(null);
             eventService.updateEventBannerUrl(eventId, null);

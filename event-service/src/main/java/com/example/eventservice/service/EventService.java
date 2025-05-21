@@ -37,7 +37,7 @@ public class EventService {
     private SellingPhaseRepository sellingPhaseRepository;
 
     @Autowired
-    private AzureBlobStorageService azureBlobStorageService;
+    private SpacesStorageService spacesStorageService;
 
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
@@ -502,8 +502,8 @@ public class EventService {
         if (!"pending".equals(event.getStatus())) {
             throw new IllegalStateException("Chỉ có thể xóa sự kiện ở trạng thái pending");
         }
-        azureBlobStorageService.deleteImage(event.getImageUrl());
-        azureBlobStorageService.deleteImage(event.getBannerUrl());
+        spacesStorageService.deleteImage(event.getImageUrl());
+        spacesStorageService.deleteImage(event.getBannerUrl());
         areaRepository.deleteByEventId(eventId);
         eventRepository.delete(event);
     }
@@ -655,8 +655,8 @@ public class EventService {
         if (!"pending".equals(event.getStatus())) {
             throw new IllegalStateException("Chỉ có thể xóa sự kiện ở trạng thái pending");
         }
-        azureBlobStorageService.deleteImage(event.getImageUrl());
-        azureBlobStorageService.deleteImage(event.getBannerUrl());
+        spacesStorageService.deleteImage(event.getImageUrl());
+        spacesStorageService.deleteImage(event.getBannerUrl());
         areaRepository.deleteByEventId(eventId);
         eventRepository.delete(event);
     }
