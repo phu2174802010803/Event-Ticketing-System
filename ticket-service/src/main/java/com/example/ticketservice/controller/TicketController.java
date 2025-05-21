@@ -51,27 +51,6 @@ public class TicketController {
         return ResponseEntity.ok(response); // Trả về 200 OK với body JSON
     }
 
-    @PostMapping("/confirm")
-    public ResponseEntity<String> confirmPayment(@RequestBody Map<String, String> confirmation) {
-        String transactionId = confirmation.get("transactionId");
-        String status = confirmation.get("status");
-        String userIdStr = confirmation.get("userId");
-        String eventIdStr = confirmation.get("eventId");
-
-        // Kiểm tra dữ liệu đầu vào
-        if (transactionId == null || status == null || userIdStr == null || eventIdStr == null) {
-            return ResponseEntity.badRequest().body("Thiếu thông tin cần thiết trong request");
-        }
-
-        // Chuyển đổi sang kiểu số
-        Integer userId = Integer.parseInt(userIdStr);
-        Integer eventId = Integer.parseInt(eventIdStr);
-
-        // Gọi TicketService với đầy đủ thông tin
-        ticketService.confirmPayment(transactionId, status, userId, eventId);
-        return ResponseEntity.ok("Xác nhận thanh toán thành công");
-    }
-
     @GetMapping("/history")
     public ResponseEntity<ResponseWrapper<List<TicketHistoryResponse>>> getTicketHistory(
             @RequestParam(required = false) String status,

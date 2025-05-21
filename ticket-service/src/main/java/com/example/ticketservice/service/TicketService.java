@@ -16,6 +16,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.*;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,6 +55,12 @@ public class TicketService {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
+    @Autowired
+    private KafkaTemplate<String, TicketUpdateEvent> kafkaTemplate;
+
+    @Autowired
+    private KafkaTemplate<String, PaymentConfirmationEvent> deadLetterKafkaTemplate;
+
     @Value("${payment.service.url}")
     private String paymentServiceUrl;
 
@@ -59,6 +68,7 @@ public class TicketService {
 
     private static final int MAX_TICKETS_PER_TRANSACTION = 4;
     private static final int HOLD_TIME_MINUTES = 10;
+    private static final int MAX_RETRIES = 3;
 
     public TicketSelectionResponse selectTickets(TicketSelectionRequest request, Integer userId, String token) {
         // Kiểm tra hàng đợi
@@ -198,24 +208,51 @@ public class TicketService {
         return response;
     }
 
+    @KafkaListener(topics = "payment-confirmations", groupId = "ticket-service")
     @Transactional
-    public void confirmPayment(String transactionId, String status, Integer userId, Integer eventId) {
-        // Lấy holdKey từ transactionId
-        String transactionKey = "transaction:" + transactionId;
+    public void handlePaymentConfirmation(PaymentConfirmationEvent event, Acknowledgment ack) {
+        int retryCount = 0;
+        boolean success = false;
+
+        while (retryCount < MAX_RETRIES && !success) {
+            try {
+                processPaymentConfirmation(event);
+                success = true;
+                ack.acknowledge();
+            } catch (Exception e) {
+                retryCount++;
+                logger.error("Failed to process payment confirmation for transactionId: {}, attempt {}/{}",
+                        event.getTransactionId(), retryCount, MAX_RETRIES, e);
+                if (retryCount == MAX_RETRIES) {
+                    logger.error("Max retries reached, sending to dead-letter queue: {}", event.getTransactionId());
+                    deadLetterKafkaTemplate.send("payment-confirmations-dlq", event);
+                    ack.acknowledge();
+                } else {
+                    try {
+                        Thread.sleep(1000 * retryCount); // Exponential backoff
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+        }
+    }
+
+    private void processPaymentConfirmation(PaymentConfirmationEvent event) {
+        String transactionKey = "transaction:" + event.getTransactionId();
         String holdKey = redisTemplate.opsForValue().get(transactionKey);
 
         if (holdKey == null) {
-            logger.warn("Không tìm thấy holdKey cho transactionId: {}", transactionId);
+            logger.warn("No holdKey found for transactionId: {}", event.getTransactionId());
             return;
         }
 
         String holdData = redisTemplate.opsForValue().get(holdKey);
         if (holdData == null) {
-            logger.warn("HoldKey đã hết hạn cho transactionId: {}", transactionId);
+            logger.warn("HoldKey expired for transactionId: {}", event.getTransactionId());
             return;
         }
 
-        // Trích xuất thông tin từ holdData và holdKey
         String[] holdParts = holdKey.split(":");
         Integer actualEventId = Integer.parseInt(holdParts[3]);
         Integer areaId = Integer.parseInt(holdParts[4]);
@@ -226,36 +263,44 @@ public class TicketService {
         String eventName = dataParts[2];
         String areaName = dataParts[3];
 
-        if ("completed".equals(status)) {
+        String availableKey = "area:available:" + actualEventId + ":" + areaId;
+        Integer newAvailable;
+
+        if ("completed".equals(event.getStatus())) {
             for (int i = 0; i < quantity; i++) {
                 Ticket ticket = new Ticket();
                 ticket.setEventId(actualEventId);
                 ticket.setAreaId(areaId);
                 ticket.setPhaseId(phaseId);
-                ticket.setUserId(userId);
+                ticket.setUserId(event.getUserId());
                 ticket.setStatus("sold");
                 ticket.setPurchaseDate(LocalDateTime.now());
                 ticket.setPrice(price);
-                ticket.setEventName(eventName); // Lưu event_name
-                ticket.setAreaName(areaName);   // Lưu area_name
-                String qrCodeUrl = generateQRCode(userId, actualEventId, areaId);
+                ticket.setEventName(eventName);
+                ticket.setAreaName(areaName);
+                String qrCodeUrl = generateQRCode(event.getUserId(), actualEventId, areaId);
                 ticket.setTicketCode(qrCodeUrl);
                 ticketRepository.save(ticket);
             }
             redisTemplate.delete(holdKey);
             redisTemplate.delete(transactionKey);
-            logger.info("Đã lưu {} vé cho userId: {}, eventId: {}", quantity, userId, actualEventId);
+            newAvailable = Integer.parseInt(redisTemplate.opsForValue().get(availableKey));
+            logger.info("Saved {} tickets for userId: {}, eventId: {}", quantity, event.getUserId(), actualEventId);
         } else {
             releaseHeldTickets(holdKey);
             redisTemplate.delete(transactionKey);
-            logger.info("Đã giải phóng vé cho transactionId: {}", transactionId);
+            newAvailable = Integer.parseInt(redisTemplate.opsForValue().get(availableKey));
+            logger.info("Released tickets for transactionId: {}", event.getTransactionId());
         }
 
-        // Cập nhật số vé khả dụng trong Redis
-        String availableKey = "area:available:" + actualEventId + ":" + areaId;
-        String availableTickets = redisTemplate.opsForValue().get(availableKey);
+        TicketUpdateEvent updateEvent = new TicketUpdateEvent();
+        updateEvent.setEventId(actualEventId);
+        updateEvent.setAreaId(areaId);
+        updateEvent.setAvailableTickets(newAvailable);
+        kafkaTemplate.send("ticket-updates", updateEvent);
+
         messagingTemplate.convertAndSend("/topic/tickets/" + actualEventId + "/" + areaId,
-                new TicketUpdateResponse(areaId, availableTickets, "Cập nhật số vé thành công"));
+                new TicketUpdateResponse(areaId, newAvailable.toString(), "Ticket update successful"));
     }
 
     @Transactional(readOnly = true)
@@ -348,9 +393,17 @@ public class TicketService {
             Integer quantity = Integer.parseInt(holdData.split(":")[0]);
             String availableKey = "area:available:" + eventId + ":" + areaId;
             Long newAvailable = redisTemplate.opsForValue().increment(availableKey, quantity);
-            redisTemplate.opsForValue().increment(availableKey, quantity);
             redisTemplate.delete(holdKey);
-            // Gửi thông báo khi giải phóng vé
+
+            // Gửi sự kiện cập nhật số vé đến Kafka
+            TicketUpdateEvent event = new TicketUpdateEvent();
+            event.setEventId(eventId);
+            event.setAreaId(areaId);
+            event.setAvailableTickets(newAvailable.intValue());
+            kafkaTemplate.send("ticket-updates", "ticketevent", event);
+            logger.info("Đã gửi sự kiện giải phóng vé: eventId={}, areaId={}, availableTickets={}", eventId, areaId, newAvailable);
+
+            // Gửi thông báo qua WebSocket
             messagingTemplate.convertAndSend("/topic/tickets/" + eventId + "/" + areaId,
                     "{\"availableTickets\": " + newAvailable + "}");
         }
