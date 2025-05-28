@@ -4,6 +4,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.List;
+import java.util.Map;
+
 @Data
 public class TemplateAreaRequestDto {
     @NotBlank(message = "Tên khu vực là bắt buộc")
@@ -20,4 +23,9 @@ public class TemplateAreaRequestDto {
 
     @NotNull(message = "Chiều cao là bắt buộc")
     private Integer height;
+
+    private List<Map<String, Float>> vertices; // Danh sách tọa độ [{x: float, y: float}, ...]
+    private String zone;                       // Tên vùng (ví dụ: "ZONE A")
+    private String fillColor;                  // Màu sắc (ví dụ: "#000000")
+    private boolean isStage;                   // Thuộc tính mới để xác định khu vực sân khấu
 }

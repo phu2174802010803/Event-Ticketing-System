@@ -48,6 +48,9 @@ public class MapTemplateService {
                         area.setY(areaDto.getY());
                         area.setWidth(areaDto.getWidth());
                         area.setHeight(areaDto.getHeight());
+                        area.setVertices(areaDto.getVertices());
+                        area.setZone(areaDto.getZone());
+                        area.setFillColor(areaDto.getFillColor());
                         area.setMapTemplate(template);
                         return area;
                     })
@@ -59,7 +62,8 @@ public class MapTemplateService {
 
         List<TemplateAreaResponseDto> areaDtos = savedTemplate.getAreas().stream()
                 .map(area -> new TemplateAreaResponseDto(area.getTemplateAreaId(), area.getName(),
-                        area.getX(), area.getY(), area.getWidth(), area.getHeight()))
+                        area.getX(), area.getY(), area.getWidth(), area.getHeight(),
+                        area.getVertices(), area.getZone(), area.getFillColor()))
                 .collect(Collectors.toList());
 
         return new MapTemplateResponseDto(
@@ -74,45 +78,55 @@ public class MapTemplateService {
         );
     }
 
+    // Thêm khu vực mới
+    @Transactional
+    public TemplateAreaResponseDto createArea(Integer templateId, TemplateAreaRequestDto requestDto) {
+        MapTemplate template = mapTemplateRepository.findById(templateId)
+                .orElseThrow(() -> new TemplateNotFoundException("Template với ID " + templateId + " không tồn tại."));
+
+        TemplateArea area = new TemplateArea();
+        area.setName(requestDto.getName());
+        area.setX(requestDto.getX());
+        area.setY(requestDto.getY());
+        area.setWidth(requestDto.getWidth());
+        area.setHeight(requestDto.getHeight());
+        area.setVertices(requestDto.getVertices());
+        area.setZone(requestDto.getZone());
+        area.setFillColor(requestDto.getFillColor());
+        area.setMapTemplate(template);
+
+        TemplateArea savedArea = templateAreaRepository.save(area);
+        template.setAreaCount(template.getAreas().size() + 1); // Cập nhật area_count
+        mapTemplateRepository.save(template);
+
+        return new TemplateAreaResponseDto(savedArea.getTemplateAreaId(), savedArea.getName(),
+                savedArea.getX(), savedArea.getY(), savedArea.getWidth(), savedArea.getHeight(),
+                savedArea.getVertices(), savedArea.getZone(), savedArea.getFillColor());
+    }
+
     public List<MapTemplateResponseDto> getAllTemplates() {
         List<MapTemplate> templates = mapTemplateRepository.findAll();
         return templates.stream()
-                .map(template -> {
-                    List<TemplateAreaResponseDto> areaDtos = template.getAreas().stream()
-                            .map(area -> new TemplateAreaResponseDto(area.getTemplateAreaId(), area.getName(),
-                                    area.getX(), area.getY(), area.getWidth(), area.getHeight()))
-                            .collect(Collectors.toList());
-                    return new MapTemplateResponseDto(
-                            template.getTemplateId(),
-                            template.getName(),
-                            template.getDescription(),
-                            template.getAreaCount(),
-                            template.getMapWidth(),
-                            template.getMapHeight(),
-                            areaDtos,
-                            null
-                    );
-                })
+                .map(this::convertToResponseDto)
                 .collect(Collectors.toList());
     }
 
     public MapTemplateResponseDto getTemplateById(Integer templateId) {
         MapTemplate template = mapTemplateRepository.findById(templateId)
                 .orElseThrow(() -> new TemplateNotFoundException("Template với ID " + templateId + " không tồn tại."));
-        List<TemplateAreaResponseDto> areaDtos = template.getAreas().stream()
+        return convertToResponseDto(template);
+    }
+
+    // Xem danh sách khu vực của mẫu map
+    @Transactional(readOnly = true)
+    public List<TemplateAreaResponseDto> getAreasByTemplate(Integer templateId) {
+        MapTemplate template = mapTemplateRepository.findById(templateId)
+                .orElseThrow(() -> new TemplateNotFoundException("Template với ID " + templateId + " không tồn tại."));
+        return template.getAreas().stream()
                 .map(area -> new TemplateAreaResponseDto(area.getTemplateAreaId(), area.getName(),
-                        area.getX(), area.getY(), area.getWidth(), area.getHeight()))
+                        area.getX(), area.getY(), area.getWidth(), area.getHeight(),
+                        area.getVertices(), area.getZone(), area.getFillColor()))
                 .collect(Collectors.toList());
-        return new MapTemplateResponseDto(
-                template.getTemplateId(),
-                template.getName(),
-                template.getDescription(),
-                template.getAreaCount(),
-                template.getMapWidth(),
-                template.getMapHeight(),
-                areaDtos,
-                null
-        );
     }
 
     @Transactional
@@ -126,47 +140,62 @@ public class MapTemplateService {
 
         template.setName(requestDto.getName());
         template.setDescription(requestDto.getDescription());
-        template.setAreaCount(requestDto.getAreaCount());
         template.setMapWidth(requestDto.getMapWidth());
         template.setMapHeight(requestDto.getMapHeight());
 
-        // Xóa các khu vực cũ
-        template.getAreas().clear();
-
-        // Thêm các khu vực mới
-        if (requestDto.getAreas() != null && !requestDto.getAreas().isEmpty()) {
-            List<TemplateArea> areas = requestDto.getAreas().stream()
-                    .map(areaDto -> {
-                        TemplateArea area = new TemplateArea();
-                        area.setName(areaDto.getName());
-                        area.setX(areaDto.getX());
-                        area.setY(areaDto.getY());
-                        area.setWidth(areaDto.getWidth());
-                        area.setHeight(areaDto.getHeight());
-                        area.setMapTemplate(template);
-                        return area;
-                    })
-                    .collect(Collectors.toList());
-            template.getAreas().addAll(areas);
-        }
+//        // Xóa các khu vực cũ
+//        template.getAreas().clear();
+//
+//        // Thêm các khu vực mới
+//        if (requestDto.getAreas() != null && !requestDto.getAreas().isEmpty()) {
+//            List<TemplateArea> areas = requestDto.getAreas().stream()
+//                    .map(areaDto -> {
+//                        TemplateArea area = new TemplateArea();
+//                        area.setName(areaDto.getName());
+//                        area.setX(areaDto.getX());
+//                        area.setY(areaDto.getY());
+//                        area.setWidth(areaDto.getWidth());
+//                        area.setHeight(areaDto.getHeight());
+//                        area.setVertices(areaDto.getVertices());
+//                        area.setZone(areaDto.getZone());
+//                        area.setFillColor(areaDto.getFillColor());
+//                        area.setMapTemplate(template);
+//                        return area;
+//                    })
+//                    .collect(Collectors.toList());
+//            template.getAreas().addAll(areas);
+//        }
 
         MapTemplate updatedTemplate = mapTemplateRepository.save(template);
 
-        List<TemplateAreaResponseDto> areaDtos = updatedTemplate.getAreas().stream()
-                .map(area -> new TemplateAreaResponseDto(area.getTemplateAreaId(), area.getName(),
-                        area.getX(), area.getY(), area.getWidth(), area.getHeight()))
-                .collect(Collectors.toList());
+        return convertToResponseDto(updatedTemplate);
+    }
 
-        return new MapTemplateResponseDto(
-                updatedTemplate.getTemplateId(),
-                updatedTemplate.getName(),
-                updatedTemplate.getDescription(),
-                updatedTemplate.getAreaCount(),
-                updatedTemplate.getMapWidth(),
-                updatedTemplate.getMapHeight(),
-                areaDtos,
-                "Cập nhật template map thành công"
-        );
+    // Cập nhật khu vực
+    @Transactional
+    public TemplateAreaResponseDto updateArea(Integer templateId, Integer areaId, TemplateAreaRequestDto requestDto) {
+        MapTemplate template = mapTemplateRepository.findById(templateId)
+                .orElseThrow(() -> new TemplateNotFoundException("Template với ID " + templateId + " không tồn tại."));
+        TemplateArea area = templateAreaRepository.findById(areaId)
+                .orElseThrow(() -> new TemplateNotFoundException("Khu vực với ID " + areaId + " không tồn tại."));
+
+        if (!area.getMapTemplate().getTemplateId().equals(templateId)) {
+            throw new IllegalArgumentException("Khu vực không thuộc mẫu map này.");
+        }
+
+        area.setName(requestDto.getName());
+        area.setX(requestDto.getX());
+        area.setY(requestDto.getY());
+        area.setWidth(requestDto.getWidth());
+        area.setHeight(requestDto.getHeight());
+        area.setVertices(requestDto.getVertices());
+        area.setZone(requestDto.getZone());
+        area.setFillColor(requestDto.getFillColor());
+
+        TemplateArea updatedArea = templateAreaRepository.save(area);
+        return new TemplateAreaResponseDto(updatedArea.getTemplateAreaId(), updatedArea.getName(),
+                updatedArea.getX(), updatedArea.getY(), updatedArea.getWidth(), updatedArea.getHeight(),
+                updatedArea.getVertices(), updatedArea.getZone(), updatedArea.getFillColor());
     }
 
     @Transactional
@@ -174,5 +203,41 @@ public class MapTemplateService {
         MapTemplate template = mapTemplateRepository.findById(templateId)
                 .orElseThrow(() -> new TemplateNotFoundException("Template với ID " + templateId + " không tồn tại."));
         mapTemplateRepository.delete(template);
+    }
+
+    // Xóa khu vực
+    @Transactional
+    public void deleteArea(Integer templateId, Integer areaId) {
+        MapTemplate template = mapTemplateRepository.findById(templateId)
+                .orElseThrow(() -> new TemplateNotFoundException("Template với ID " + templateId + " không tồn tại."));
+        TemplateArea area = templateAreaRepository.findById(areaId)
+                .orElseThrow(() -> new TemplateNotFoundException("Khu vực với ID " + areaId + " không tồn tại."));
+
+        if (!area.getMapTemplate().getTemplateId().equals(templateId)) {
+            throw new IllegalArgumentException("Khu vực không thuộc mẫu map này.");
+        }
+
+        template.setAreaCount(template.getAreas().size() - 1); // Cập nhật area_count
+        mapTemplateRepository.save(template);
+
+        templateAreaRepository.delete(area);
+    }
+
+    private MapTemplateResponseDto convertToResponseDto(MapTemplate template) {
+        List<TemplateAreaResponseDto> areaDtos = template.getAreas().stream()
+                .map(area -> new TemplateAreaResponseDto(area.getTemplateAreaId(), area.getName(),
+                        area.getX(), area.getY(), area.getWidth(), area.getHeight(),
+                        area.getVertices(), area.getZone(), area.getFillColor()))
+                .collect(Collectors.toList());
+        return new MapTemplateResponseDto(
+                template.getTemplateId(),
+                template.getName(),
+                template.getDescription(),
+                template.getAreaCount(),
+                template.getMapWidth(),
+                template.getMapHeight(),
+                areaDtos, "Cập nhật template map thành công"
+//                template.getAreas().isEmpty() ? null : "Cập nhật template map thành công"
+        );
     }
 }

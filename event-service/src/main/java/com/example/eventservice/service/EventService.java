@@ -12,7 +12,9 @@ import jakarta.transaction.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -69,6 +71,7 @@ public class EventService {
                             .orElseThrow(() -> new RuntimeException("Không tìm thấy template area"));
                     AreaDetailDto dto = new AreaDetailDto();
                     dto.setAreaId(area.getAreaId());
+                    dto.setTemplateAreaId(templateArea.getTemplateAreaId());
                     dto.setName(area.getName());
                     dto.setX(templateArea.getX());
                     dto.setY(templateArea.getY());
@@ -77,6 +80,26 @@ public class EventService {
                     dto.setTotalTickets(area.getTotalTickets());
                     dto.setAvailableTickets(area.getAvailableTickets());
                     dto.setPrice(area.getPrice());
+                    // Sử dụng vertices nếu có, nếu không thì tính từ x, y, width, height
+                    if (templateArea.getVertices() != null && !templateArea.getVertices().isEmpty()) {
+                        dto.setVertices(templateArea.getVertices());
+                    } else {
+                        List<Map<String, Float>> calculatedVertices = new ArrayList<>();
+                        calculatedVertices.add(Map.of("x", (float) templateArea.getX(), "y", (float) templateArea.getY()));
+                        calculatedVertices.add(Map.of("x", (float) (templateArea.getX() + templateArea.getWidth()), "y", (float) templateArea.getY()));
+                        calculatedVertices.add(Map.of("x", (float) (templateArea.getX() + templateArea.getWidth()), "y", (float) (templateArea.getY() + templateArea.getHeight())));
+                        calculatedVertices.add(Map.of("x", (float) templateArea.getX(), "y", (float) (templateArea.getY() + templateArea.getHeight())));
+                        dto.setVertices(calculatedVertices);
+                    }
+                    dto.setZone(templateArea.getZone());
+                    dto.setFillColor(templateArea.getFillColor());
+
+                    if (!templateArea.isStage()) { // Chỉ thêm thông tin vé cho khu vực không phải STAGE
+                        dto.setTotalTickets(area.getTotalTickets());
+                        dto.setAvailableTickets(area.getAvailableTickets());
+                        dto.setPrice(area.getPrice());
+                    }
+
                     return dto;
                 })
                 .collect(Collectors.toList());
@@ -319,9 +342,19 @@ public class EventService {
                 area.setEventId(savedEvent.getEventId());
                 area.setTemplateAreaId(matchingTemplateArea.getTemplateAreaId());
                 area.setName(areaDto.getName() != null ? areaDto.getName() : matchingTemplateArea.getName());
-                area.setTotalTickets(areaDto.getTotalTickets());
-                area.setAvailableTickets(areaDto.getTotalTickets());
-                area.setPrice(areaDto.getPrice());
+
+                if (matchingTemplateArea.isStage()) {
+                    area.setTotalTickets(0); // Mặc định cho STAGE
+                    area.setAvailableTickets(0);
+                    area.setPrice(0.0);
+                } else {
+                    if (areaDto.getTotalTickets() == null || areaDto.getPrice() == null) {
+                        throw new IllegalArgumentException("totalTickets và price là bắt buộc cho khu vực không phải STAGE");
+                    }
+                    area.setTotalTickets(areaDto.getTotalTickets());
+                    area.setAvailableTickets(areaDto.getTotalTickets());
+                    area.setPrice(areaDto.getPrice());
+                }
                 areaRepository.save(area);
             }
         }
@@ -352,7 +385,7 @@ public class EventService {
         if (!status.equals("pending") && !status.equals("approved") && !status.equals("rejected")) {
             throw new IllegalArgumentException("Trạng thái không hợp lệ");
         }
-        event.setStatus(status);
+        event.setStatus("approved");
         event.setCreatedAt(LocalDateTime.now());
         event.setUpdatedAt(LocalDateTime.now());
 
@@ -373,9 +406,19 @@ public class EventService {
                 area.setEventId(savedEvent.getEventId());
                 area.setTemplateAreaId(matchingTemplateArea.getTemplateAreaId());
                 area.setName(areaDto.getName() != null ? areaDto.getName() : matchingTemplateArea.getName());
-                area.setTotalTickets(areaDto.getTotalTickets());
-                area.setAvailableTickets(areaDto.getTotalTickets());
-                area.setPrice(areaDto.getPrice());
+
+                if (matchingTemplateArea.isStage()) {
+                    area.setTotalTickets(0); // Mặc định cho STAGE
+                    area.setAvailableTickets(0);
+                    area.setPrice(0.0);
+                } else {
+                    if (areaDto.getTotalTickets() == null || areaDto.getPrice() == null) {
+                        throw new IllegalArgumentException("totalTickets và price là bắt buộc cho khu vực không phải STAGE");
+                    }
+                    area.setTotalTickets(areaDto.getTotalTickets());
+                    area.setAvailableTickets(areaDto.getTotalTickets());
+                    area.setPrice(areaDto.getPrice());
+                }
                 areaRepository.save(area);
 
             }

@@ -2,6 +2,11 @@ package com.example.eventservice.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import java.util.List;
+import java.util.Map;
 
 @Entity
 @Table(name = "template_areas")
@@ -30,4 +35,17 @@ public class TemplateArea {
 
     @Column(nullable = false)
     private Integer height;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private List<Map<String, Float>> vertices;
+
+    @Column
+    private String zone;
+
+    @Column(name = "fill_color")
+    private String fillColor;
+
+    @Column(name = "is_stage", nullable = false, columnDefinition = "boolean default false")
+    private boolean isStage; // Thuộc tính mới
 }

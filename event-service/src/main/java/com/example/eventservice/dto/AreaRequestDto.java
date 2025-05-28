@@ -11,9 +11,6 @@ public class AreaRequestDto {
 
     private Integer templateAreaId;
 
-    @NotNull(message = "Tổng số vé là bắt buộc")
-    private Integer totalTickets;
-
-    @NotNull(message = "Giá vé là bắt buộc")
-    private Double price;
+    private Integer totalTickets; // Không bắt buộc khi isStage = true
+    private Double price;         // Không bắt buộc khi isStage = true
 }
