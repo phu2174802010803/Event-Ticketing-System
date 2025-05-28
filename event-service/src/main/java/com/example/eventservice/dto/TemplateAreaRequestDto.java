@@ -1,5 +1,6 @@
 package com.example.eventservice.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -27,5 +28,7 @@ public class TemplateAreaRequestDto {
     private List<Map<String, Float>> vertices; // Danh sách tọa độ [{x: float, y: float}, ...]
     private String zone;                       // Tên vùng (ví dụ: "ZONE A")
     private String fillColor;                  // Màu sắc (ví dụ: "#000000")
-    private boolean isStage;                   // Thuộc tính mới để xác định khu vực sân khấu
+
+    @JsonProperty("isStage")
+    private boolean isStage;
 }

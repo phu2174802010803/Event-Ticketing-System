@@ -51,6 +51,7 @@ public class MapTemplateService {
                         area.setVertices(areaDto.getVertices());
                         area.setZone(areaDto.getZone());
                         area.setFillColor(areaDto.getFillColor());
+                        area.setStage(areaDto.isStage());
                         area.setMapTemplate(template);
                         return area;
                     })
