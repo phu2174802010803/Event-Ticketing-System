@@ -24,9 +24,10 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/payments/return", "/api/payments/return/**").permitAll() // Cho phép truy cập không xác thực
-                        .requestMatchers("/api/payments/**").authenticated() // Các endpoint khác yêu cầu xác thực
-                        .anyRequest().permitAll()
+                        .requestMatchers("/api/payments/return").permitAll()
+                        .requestMatchers("/api/organizer/**").hasRole("ORGANIZER")
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

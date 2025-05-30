@@ -1,13 +1,13 @@
 package com.example.paymentservice.service;
 
-import com.example.paymentservice.dto.PaymentConfirmationEvent;
-import com.example.paymentservice.dto.PaymentRequest;
-import com.example.paymentservice.dto.PaymentResponse;
+import com.example.paymentservice.dto.*;
 import com.example.paymentservice.model.Transaction;
 import com.example.paymentservice.repository.TransactionRepository;
 import com.example.paymentservice.util.VNPayUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +21,7 @@ import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -28,6 +29,9 @@ public class PaymentService {
 
     @Autowired
     private TransactionRepository transactionRepository;
+
+    @Autowired
+    private EventClient eventClient;
 
     @Autowired
     private KafkaTemplate<String, PaymentConfirmationEvent> kafkaTemplate;
@@ -124,5 +128,72 @@ public class PaymentService {
             // Log lỗi nhưng không throw exception để không làm gián đoạn quy trình callback
             System.err.println("Lỗi khi gửi xác nhận đến ticket service: " + e.getMessage());
         }
+    }
+
+    public Page<Transaction> getOrganizerTransactions(Integer organizerId, String token, int page, int size) {
+        List<Integer> eventIds = eventClient.getOrganizerEventIds(organizerId, token);
+        return transactionRepository.findByEventIdIn(eventIds, PageRequest.of(page, size));
+    }
+
+    public Page<Transaction> getAllTransactions(int page, int size) {
+        return transactionRepository.findAll(PageRequest.of(page, size));
+    }
+
+    public Transaction getTransactionById(String transactionId) {
+        return transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new IllegalArgumentException("Transaction not found"));
+    }
+
+    public FinancialReportDto generateFinancialReport(LocalDateTime startDate, LocalDateTime endDate) {
+        //Lấy tất cả giao dịch trong khoảng thời gian
+        List<Transaction> allTransactions = transactionRepository.findAll();
+
+        //Kiểm tra xem có giao dịch nào trong khoảng thời gian không
+        List<Transaction> transactions = allTransactions
+                .stream()
+                .filter(t -> (t.getTransactionDate().isEqual(startDate) || t.getTransactionDate().isAfter(startDate)) &&
+                        (t.getTransactionDate().isEqual(endDate) || t.getTransactionDate().isBefore(endDate)) &&
+                        "completed".equals(t.getStatus()))
+                .toList();
+
+        if (transactions.isEmpty()) {
+            //Nếu không có giao dịch trả về báo cáo trống
+            FinancialReportDto emptyReport = new FinancialReportDto();
+            emptyReport.setTotalRevenue(0.0);
+            emptyReport.setTotalTransactions(0);
+            emptyReport.setAverageTransactionAmount(0.0);
+            return emptyReport;
+        }
+
+        // Tính toán tổng doanh thu và số lượng giao dịch
+        Double totalRevenue = transactions.stream()
+                .mapToDouble(Transaction::getTotalAmount)
+                .sum();
+
+        Long totalTransactions = (long) transactions.size();
+
+        System.out.println("Total revenue: " + totalRevenue + ", Total transactions: " + totalTransactions);
+
+        FinancialReportDto report = new FinancialReportDto();
+        report.setTotalRevenue(totalRevenue);
+        report.setTotalTransactions(totalTransactions.intValue());
+        report.setAverageTransactionAmount(totalTransactions > 0 ? totalRevenue / totalTransactions : 0.0);
+        return report;
+    }
+
+    public TransactionResponseDto toResponseDto(Transaction transaction) {
+        TransactionResponseDto dto = new TransactionResponseDto();
+        dto.setTransactionId(transaction.getTransactionId());
+        dto.setUserId(transaction.getUserId());
+        dto.setEventId(transaction.getEventId());
+        dto.setTotalAmount(transaction.getTotalAmount());
+        dto.setPaymentMethod(transaction.getPaymentMethod());
+        dto.setStatus(transaction.getStatus());
+        dto.setTransactionDate(transaction.getTransactionDate());
+        return dto;
+    }
+
+    public EventClient getEventClient() {
+        return eventClient;
     }
 }
