@@ -28,6 +28,14 @@ spring:
           uri: http://localhost:8084
           predicates:
             - Path=/api/admin/tickets/**
+        - id: payment-service-organizer
+          uri: http://localhost:8086
+          predicates:
+            - Path=/api/organizer/transactions/**
+        - id: payment-service-admin
+          uri: http://localhost:8086
+          predicates:
+            - Path=/api/admin/transactions/**, /api/admin/reports/**
       default-filters:
         - AuthFilter
       globalcors:
