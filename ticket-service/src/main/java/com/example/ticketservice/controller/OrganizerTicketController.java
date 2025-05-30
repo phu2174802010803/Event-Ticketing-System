@@ -1,9 +1,6 @@
 package com.example.ticketservice.controller;
 
-import com.example.ticketservice.dto.ResponseWrapper;
-import com.example.ticketservice.dto.TicketHistoryResponse;
-import com.example.ticketservice.dto.TicketScanRequest;
-import com.example.ticketservice.dto.TicketScanResponse;
+import com.example.ticketservice.dto.*;
 import com.example.ticketservice.service.TicketService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -40,5 +37,15 @@ public class OrganizerTicketController {
         }
         TicketScanResponse response = ticketService.scanTicket(request, role);
         return ResponseEntity.ok(new ResponseWrapper<>("success", "Quét vé thành công", response));
+    }
+
+    @GetMapping("/tickets/events/{eventId}/sales")
+    public ResponseEntity<ResponseWrapper<EventSalesResponseDto>> getEventSales(
+            @PathVariable Integer eventId,
+            @RequestHeader("Authorization") String authorizationHeader) {
+        Integer organizerId = Integer.parseInt((String) SecurityContextHolder.getContext().getAuthentication().getPrincipal());
+        String token = authorizationHeader.substring(7);
+        EventSalesResponseDto sales = ticketService.getEventSalesForOrganizer(eventId, organizerId, token);
+        return ResponseEntity.ok(new ResponseWrapper<>("success", "Ticket sales statistics for event", sales));
     }
 }

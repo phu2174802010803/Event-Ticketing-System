@@ -1,9 +1,6 @@
 package com.example.ticketservice.controller;
 
-import com.example.ticketservice.dto.ResponseWrapper;
-import com.example.ticketservice.dto.TicketHistoryResponse;
-import com.example.ticketservice.dto.TicketScanRequest;
-import com.example.ticketservice.dto.TicketScanResponse;
+import com.example.ticketservice.dto.*;
 import com.example.ticketservice.service.TicketService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -39,5 +36,15 @@ public class AdminTicketController {
         }
         TicketScanResponse response = ticketService.scanTicket(request, role);
         return ResponseEntity.ok(new ResponseWrapper<>("success", "Quét vé thành công", response));
+    }
+
+    @GetMapping("/tickets/sales")
+    public ResponseEntity<ResponseWrapper<SystemSalesResponseDto>> getSystemSales(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestHeader("Authorization") String authorizationHeader) {
+        String token = authorizationHeader.substring(7);
+        SystemSalesResponseDto sales = ticketService.getSystemSales(page, size, token);
+        return ResponseEntity.ok(new ResponseWrapper<>("success", "System-wide ticket sales statistics", sales));
     }
 }

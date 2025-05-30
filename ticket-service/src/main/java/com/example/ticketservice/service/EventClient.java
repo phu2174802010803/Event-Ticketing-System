@@ -1,12 +1,14 @@
 package com.example.ticketservice.service;
 
-import com.example.ticketservice.dto.AreaDetailDto;
-import com.example.ticketservice.dto.EventInfo;
-import com.example.ticketservice.dto.SellingPhaseResponse;
+import com.example.ticketservice.dto.*;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
+
+import java.util.Arrays;
+import java.util.List;
 
 @Component
 public class EventClient {
@@ -21,7 +23,8 @@ public class EventClient {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + token);
         HttpEntity<String> entity = new HttpEntity<>(headers);
-        ResponseEntity<AreaDetailDto> response = restTemplate.exchange(url, HttpMethod.GET, entity, AreaDetailDto.class);
+        ResponseEntity<AreaDetailDto> response = restTemplate.exchange(url, HttpMethod.GET, entity,
+                AreaDetailDto.class);
         return response.getBody();
     }
 
@@ -30,7 +33,8 @@ public class EventClient {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + token);
         HttpEntity<String> entity = new HttpEntity<>(headers);
-        ResponseEntity<SellingPhaseResponse[]> response = restTemplate.exchange(url, HttpMethod.GET, entity, SellingPhaseResponse[].class);
+        ResponseEntity<SellingPhaseResponse[]> response = restTemplate.exchange(url, HttpMethod.GET, entity,
+                SellingPhaseResponse[].class);
         return response.getBody();
     }
 
@@ -41,5 +45,54 @@ public class EventClient {
         HttpEntity<String> entity = new HttpEntity<>(headers);
         ResponseEntity<EventInfo> response = restTemplate.exchange(url, HttpMethod.GET, entity, EventInfo.class);
         return response.getBody();
+    }
+
+    // Method for Admins to fetch areas
+    public List<AreaDetailDto> getAreasByEvent(Integer eventId, String token) {
+        String url = eventServiceUrl + "/api/admin/events/" + eventId + "/areas";
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + token);
+        HttpEntity<String> entity = new HttpEntity<>(headers);
+        AreaDetailDto[] areas = restTemplate.exchange(url, HttpMethod.GET, entity, AreaDetailDto[].class).getBody();
+        return Arrays.asList(areas != null ? areas : new AreaDetailDto[0]);
+    }
+
+    // New method for Organizers to fetch areas
+    public List<AreaResponseDto> getAreasByEventForOrganizer(Integer eventId, String token) {
+        String url = eventServiceUrl + "/api/organizer/events/" + eventId + "/areas";
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + token);
+        HttpEntity<String> entity = new HttpEntity<>(headers);
+
+        ResponseEntity<ResponseWrapper<List<AreaResponseDto>>> response = restTemplate.exchange(
+                url,
+                HttpMethod.GET,
+                entity,
+                new ParameterizedTypeReference<ResponseWrapper<List<AreaResponseDto>>>() {}
+        );
+        ResponseWrapper<List<AreaResponseDto>> wrapper = response.getBody();
+        return wrapper != null && wrapper.getData() != null ? wrapper.getData() : Arrays.asList(new AreaResponseDto[0]);
+    }
+
+    public List<EventInfo> getAllEvents(String token) {
+        String url = eventServiceUrl + "/api/admin/events";
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + token);
+        HttpEntity<String> entity = new HttpEntity<>(headers);
+        EventInfo[] events = restTemplate.exchange(url, HttpMethod.GET, entity, EventInfo[].class).getBody();
+        return Arrays.asList(events != null ? events : new EventInfo[0]);
+    }
+
+    public boolean checkEventOwnership(Integer organizerId, Integer eventId, String token) {
+        String url = eventServiceUrl + "/api/organizer/events/" + eventId;
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + token);
+        HttpEntity<String> entity = new HttpEntity<>(headers);
+        try {
+            restTemplate.exchange(url, HttpMethod.GET, entity, Void.class);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

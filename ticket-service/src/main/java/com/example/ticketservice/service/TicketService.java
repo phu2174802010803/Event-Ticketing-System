@@ -304,6 +304,117 @@ public class TicketService {
     }
 
     @Transactional(readOnly = true)
+    public EventSalesResponseDto getEventSalesForOrganizer(Integer eventId, Integer organizerId, String token) {
+        // Kiểm tra quyền sở hữu sự kiện
+        EventInfo eventInfo = eventClient.getEventInfo(eventId, token);
+        if (eventInfo == null || !eventClient.checkEventOwnership(organizerId, eventId, token)) {
+            throw new IllegalArgumentException("Không tìm thấy sự kiện hoặc bạn không có quyền truy cập");
+        }
+
+        // Lấy danh sách vé từ cơ sở dữ liệu
+        List<Ticket> tickets = ticketRepository.findByEventId(eventId);
+        int soldTickets = (int) tickets.stream()
+                .filter(t -> "sold".equals(t.getStatus()) || "used".equals(t.getStatus()))
+                .count();
+        double totalRevenue = tickets.stream()
+                .filter(t -> "sold".equals(t.getStatus()) || "used".equals(t.getStatus()))
+                .mapToDouble(Ticket::getPrice)
+                .sum();
+
+        // Lấy thông tin khu vực từ Event Service bằng endpoint Organizer
+        List<AreaResponseDto> areas = eventClient.getAreasByEventForOrganizer(eventId, token);
+        int totalTickets = areas.stream().mapToInt(AreaResponseDto::getTotalTickets).sum();
+        int availableTickets = totalTickets - soldTickets;
+
+        // Xây dựng chi tiết bán vé theo khu vực
+        List<AreaSalesDto> areaSales = areas.stream().map(area -> {
+            int areaSoldTickets = (int) tickets.stream()
+                    .filter(t -> t.getAreaId().equals(area.getAreaId()) &&
+                            ("sold".equals(t.getStatus()) || "used".equals(t.getStatus())))
+                    .count();
+            AreaSalesDto dto = new AreaSalesDto();
+            dto.setAreaId(area.getAreaId());
+            dto.setAreaName(area.getName());
+            dto.setTotalTickets(area.getTotalTickets());
+            dto.setSoldTickets(areaSoldTickets);
+            dto.setAvailableTickets(area.getTotalTickets() - areaSoldTickets);
+            dto.setPrice(area.getPrice());
+            return dto;
+        }).collect(Collectors.toList());
+
+        // Lưu kết quả vào Redis
+        String cacheKey = "sales:organizer:" + eventId;
+        redisTemplate.opsForValue().set(cacheKey, String.format("%d:%d:%.2f", soldTickets, totalTickets, totalRevenue), 5, TimeUnit.MINUTES);
+
+        // Xây dựng phản hồi
+        EventSalesResponseDto response = new EventSalesResponseDto();
+        response.setEventId(eventId);
+        response.setEventName(eventInfo.getName());
+        response.setTotalTickets(totalTickets);
+        response.setSoldTickets(soldTickets);
+        response.setAvailableTickets(availableTickets);
+        response.setTotalRevenue(totalRevenue);
+        response.setAreas(areaSales);
+        return response;
+    }
+
+    @Transactional(readOnly = true)
+    public SystemSalesResponseDto getSystemSales(int page, int size, String token) {
+        // Fetch all events from Event Service
+        List<EventInfo> allEvents = eventClient.getAllEvents(token);
+        int totalEvents = allEvents.size();
+
+        // Pagination
+        int start = page * size;
+        int end = Math.min(start + size, totalEvents);
+        List<EventInfo> pagedEvents = allEvents.subList(start, end);
+
+        // Fetch all tickets
+        List<Ticket> allTickets = ticketRepository.findAll();
+        int totalSoldTickets = (int) allTickets.stream()
+                .filter(t -> "sold".equals(t.getStatus()) || "used".equals(t.getStatus()))
+                .count();
+        double totalRevenue = allTickets.stream()
+                .filter(t -> "sold".equals(t.getStatus()) || "used".equals(t.getStatus()))
+                .mapToDouble(Ticket::getPrice)
+                .sum();
+
+        // Build event summaries
+        List<EventSalesSummaryDto> eventSummaries = pagedEvents.stream().map(event -> {
+            List<Ticket> eventTickets = allTickets.stream()
+                    .filter(t -> t.getEventId().equals(event.getEventId()))
+                    .collect(Collectors.toList());
+            int sold = (int) eventTickets.stream()
+                    .filter(t -> "sold".equals(t.getStatus()) || "used".equals(t.getStatus()))
+                    .count();
+            double revenue = eventTickets.stream()
+                    .filter(t -> "sold".equals(t.getStatus()) || "used".equals(t.getStatus()))
+                    .mapToDouble(Ticket::getPrice)
+                    .sum();
+            EventSalesSummaryDto summary = new EventSalesSummaryDto();
+            summary.setEventId(event.getEventId());
+            summary.setEventName(event.getName());
+            summary.setSoldTickets(sold);
+            summary.setTotalRevenue(revenue);
+            return summary;
+        }).collect(Collectors.toList());
+
+        // Cache system-wide stats
+        String cacheKey = "sales:admin:page" + page + ":size" + size;
+        redisTemplate.opsForValue().set(cacheKey, String.format("%d:%.2f", totalSoldTickets, totalRevenue), 5, java.util.concurrent.TimeUnit.MINUTES);
+
+        // Build response
+        SystemSalesResponseDto response = new SystemSalesResponseDto();
+        response.setTotalEvents(totalEvents);
+        response.setTotalSoldTickets(totalSoldTickets);
+        response.setTotalRevenue(totalRevenue);
+        response.setEvents(eventSummaries);
+        response.setPage(page);
+        response.setSize(size);
+        return response;
+    }
+
+    @Transactional(readOnly = true)
     public List<TicketHistoryResponse> getTicketHistory(Integer userId, String status, int page, int size, String role) {
         if (!"USER".equals(role)) {
             throw new IllegalStateException("Chỉ người dùng mới có quyền truy cập lịch sử vé cá nhân");
