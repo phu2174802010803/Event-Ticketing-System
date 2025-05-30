@@ -15,7 +15,7 @@ spring:
         - id: event-service
           uri: http://localhost:8083
           predicates:
-            - Path=/api/events/public/**, /api/events/**, /ws/**, /ws-native/**
+            - Path=/api/events/public/**, /api/events/**
           filters:
             - name: ModifyResponseBody
               args:
@@ -30,7 +30,7 @@ spring:
         - id: ticket-service
           uri: http://localhost:8084
           predicates:
-            - Path=/api/tickets/**, /api/queue/**
+            - Path=/api/tickets/**, /api/queue/**, /ws/**, /ws-native/**
         - id: payment-service
           uri: http://localhost:8086
           predicates:
