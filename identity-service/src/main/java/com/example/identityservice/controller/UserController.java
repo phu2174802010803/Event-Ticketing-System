@@ -62,4 +62,20 @@ public class UserController {
         userService.save(user);
         return ResponseEntity.ok("Cập nhật thông tin thành công");
     }
+
+    @GetMapping("/{userId}")
+    public ResponseEntity<UserResponseDto> getUserById(@PathVariable Integer userId) {
+        User user = userService.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Người dùng không tồn tại"));
+        return ResponseEntity.ok(new UserResponseDto(
+                user.getUserId(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getFullName(),
+                user.getPhone(),
+                user.getAddress(),
+                user.getRole().toString(),
+                user.getCreatedAt(),
+                user.isActive()));
+    }
 }

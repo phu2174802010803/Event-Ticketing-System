@@ -1,9 +1,6 @@
 package com.example.identityservice.service;
 
-import com.example.identityservice.dto.UserCreateDto;
-import com.example.identityservice.dto.UserManagementResponseDto;
-import com.example.identityservice.dto.UserRegistrationDto;
-import com.example.identityservice.dto.UserUpdateDto;
+import com.example.identityservice.dto.*;
 import com.example.identityservice.exception.RegistrationException;
 import com.example.identityservice.model.PasswordResetToken;
 import com.example.identityservice.model.Role;
@@ -20,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
@@ -39,6 +37,9 @@ public class UserService {
 
     @Autowired
     private EmailService emailService;
+
+    @Autowired
+    private PaymentClient paymentClient;
 
     @Autowired
     private RedisTemplate<String, String> redisTemplate; // Thêm RedisTemplate
@@ -238,6 +239,44 @@ public class UserService {
         } catch (Exception e) {
             throw new RuntimeException("Không thể gửi email thông báo: " + e.getMessage());
         }
+    }
+
+    // Phương thức tìm kiếm theo ID với caching
+    public Optional<User> findById(Integer userId) {
+        String key = "user:id:" + userId;
+        String cachedUser = redisTemplate.opsForValue().get(key);
+
+        if (cachedUser != null) {
+            Optional<User> user = userRepository.findById(userId);
+            if (user.isPresent()) {
+                return user;
+            }
+        }
+
+        Optional<User> user = userRepository.findById(userId);
+        if (user.isPresent()) {
+            redisTemplate.opsForValue().set(key, "exists", 10, TimeUnit.MINUTES);
+        }
+        return user;
+    }
+
+    public UserTransactionHistory getUserTransactionHistory(Integer userId, String token) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Người dùng không tồn tại"));
+
+        ResponseWrapper<List<UserTransactionHistory.TransactionDetail>> wrapper = paymentClient.getTransactionsByUserId(userId, token);
+        if (wrapper == null || !"success".equals(wrapper.getStatus())) {
+            throw new RuntimeException("Không thể lấy lịch sử giao dịch");
+        }
+
+        UserTransactionHistory history = new UserTransactionHistory();
+        history.setUserId(user.getUserId());
+        history.setUsername(user.getUsername());
+        history.setEmail(user.getEmail());
+        history.setFullName(user.getFullName());
+        history.setTransactions(wrapper.getData());
+
+        return history;
     }
 
     private UserManagementResponseDto convertToResponseDto(User user) {

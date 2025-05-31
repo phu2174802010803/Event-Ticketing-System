@@ -1,9 +1,6 @@
 package com.example.identityservice.controller;
 
-import com.example.identityservice.dto.ResponseWrapper;
-import com.example.identityservice.dto.UserCreateDto;
-import com.example.identityservice.dto.UserManagementResponseDto;
-import com.example.identityservice.dto.UserUpdateDto;
+import com.example.identityservice.dto.*;
 import com.example.identityservice.service.UserService;
 import jakarta.validation.Valid;
 import lombok.Data;
@@ -65,6 +62,15 @@ public class AdminUserController {
     public ResponseEntity<ResponseWrapper<String>> deactivateUser(@PathVariable Integer id) {
         userService.deactivateUser(id);
         return ResponseEntity.ok(new ResponseWrapper<>("success", "Vô hiệu hóa tài khoản thành công", null));
+    }
+
+    @GetMapping("/{userId}/history")
+    public ResponseEntity<ResponseWrapper<UserTransactionHistory>> getUserTransactionHistory(
+            @PathVariable Integer userId,
+            @RequestHeader("Authorization") String authorizationHeader) {
+        String token = authorizationHeader.substring(7); // Bỏ "Bearer "
+        UserTransactionHistory history = userService.getUserTransactionHistory(userId, token);
+        return ResponseEntity.ok(new ResponseWrapper<>("success", "Lịch sử giao dịch và vé của người dùng", history));
     }
 }
 
