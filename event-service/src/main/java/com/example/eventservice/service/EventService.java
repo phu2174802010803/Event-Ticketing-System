@@ -93,6 +93,7 @@ public class EventService {
                     }
                     dto.setZone(templateArea.getZone());
                     dto.setFillColor(templateArea.getFillColor());
+                    dto.setStage(templateArea.isStage());
 
                     if (!templateArea.isStage()) { // Chỉ thêm thông tin vé cho khu vực không phải STAGE
                         dto.setTotalTickets(area.getTotalTickets());

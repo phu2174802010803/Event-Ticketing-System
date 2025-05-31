@@ -20,4 +20,5 @@ public class AreaDetailDto {
     private List<Map<String, Float>> vertices; // Định dạng [{x: float, y: float}, ...]
     private String zone;
     private String fillColor;
+    private boolean isStage;
 }
