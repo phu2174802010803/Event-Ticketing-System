@@ -27,10 +27,7 @@ import org.springframework.web.client.RestTemplate;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.Base64;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -39,6 +36,9 @@ public class TicketService {
 
     @Autowired
     private EventClient eventClient;
+
+    @Autowired
+    private IdentityClient identityClient;
 
     @Autowired
     private TicketRepository ticketRepository;
@@ -276,8 +276,7 @@ public class TicketService {
                 ticket.setStatus("sold");
                 ticket.setPurchaseDate(LocalDateTime.now());
                 ticket.setPrice(price);
-                ticket.setEventName(eventName);
-                ticket.setAreaName(areaName);
+                ticket.setTransactionId(event.getTransactionId());
                 String qrCodeUrl = generateQRCode(event.getUserId(), actualEventId, areaId);
                 ticket.setTicketCode(qrCodeUrl);
                 ticketRepository.save(ticket);
@@ -415,61 +414,6 @@ public class TicketService {
     }
 
     @Transactional(readOnly = true)
-    public List<TicketHistoryResponse> getTicketHistory(Integer userId, String status, int page, int size, String role) {
-        if (!"USER".equals(role)) {
-            throw new IllegalStateException("Chỉ người dùng mới có quyền truy cập lịch sử vé cá nhân");
-        }
-        Page<Ticket> tickets = ticketRepository.findByUserIdAndStatus(userId, status, PageRequest.of(page, size));
-        return tickets.stream()
-                .map(ticket -> new TicketHistoryResponse(
-                        ticket.getTicketId(),
-                        ticket.getEventName(),
-                        ticket.getAreaName(),
-                        ticket.getStatus(),
-                        ticket.getTicketCode(),
-                        ticket.getPurchaseDate().toString()
-                ))
-                .collect(Collectors.toList());
-    }
-
-    @Transactional(readOnly = true)
-    public List<TicketHistoryResponse> getTicketHistoryForOrganizer(Integer organizerId, Integer eventId, String status, int page, int size) {
-        // Kiểm tra quyền sở hữu sự kiện qua Event Service (giả định)
-        // eventClient.checkEventOwnership(organizerId, eventId);
-        Page<Ticket> tickets = ticketRepository.findByEventIdAndStatus(eventId, status, PageRequest.of(page, size));
-        return tickets.stream()
-                .map(ticket -> new TicketHistoryResponse(
-                        ticket.getTicketId(),
-                        ticket.getEventName(),
-                        ticket.getAreaName(),
-                        ticket.getStatus(),
-                        ticket.getTicketCode(),
-                        ticket.getPurchaseDate().toString()
-                ))
-                .collect(Collectors.toList());
-    }
-
-    @Transactional(readOnly = true)
-    public List<TicketHistoryResponse> getAllTickets(Integer eventId, String status, int page, int size, String role) {
-        if (!"ADMIN".equals(role)) {
-            throw new IllegalStateException("Chỉ Admin mới có quyền truy cập tất cả vé");
-        }
-        Page<Ticket> tickets = eventId != null ?
-                ticketRepository.findByEventIdAndStatus(eventId, status, PageRequest.of(page, size)) :
-                ticketRepository.findAll(PageRequest.of(page, size));
-        return tickets.stream()
-                .map(ticket -> new TicketHistoryResponse(
-                        ticket.getTicketId(),
-                        ticket.getEventName(),
-                        ticket.getAreaName(),
-                        ticket.getStatus(),
-                        ticket.getTicketCode(),
-                        ticket.getPurchaseDate().toString()
-                ))
-                .collect(Collectors.toList());
-    }
-
-    @Transactional(readOnly = true)
     public TicketQRResponse getTicketQR(Integer ticketId, Integer userId, String role) {
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new IllegalArgumentException("Vé không tồn tại"));
@@ -493,6 +437,144 @@ public class TicketService {
         ticket.setStatus("used");
         ticketRepository.save(ticket);
         return new TicketScanResponse("Vé hợp lệ", "used");
+    }
+
+    @Transactional(readOnly = true)
+    public List<TicketResponse> getUserTickets(Integer userId, String status, int page, int size, String token) {
+        Page<Ticket> tickets = status == null ?
+                ticketRepository.findByUserId(userId, PageRequest.of(page, size)) :
+                ticketRepository.findByUserIdAndStatus(userId, status, PageRequest.of(page, size));
+        return enrichTicketData(tickets, token, "USER");
+    }
+
+    @Transactional(readOnly = true)
+    public List<TicketResponse> getOrganizerTickets(Integer organizerId, Integer eventId, String status, int page, int size, String token) {
+        if (!eventClient.checkEventOwnership(organizerId, eventId, token)) {
+            throw new IllegalStateException("Bạn không có quyền truy cập danh sách vé của sự kiện này");
+        }
+        Page<Ticket> tickets = status == null ?
+                ticketRepository.findByEventId(eventId, PageRequest.of(page, size)) :
+                ticketRepository.findByEventIdAndStatus(eventId, status, PageRequest.of(page, size));
+        return enrichTicketData(tickets, token, "ORGANIZER");
+    }
+
+    @Transactional(readOnly = true)
+    public List<TicketResponse> getAdminTickets(Integer eventId, String status, int page, int size, String token) {
+        Page<Ticket> tickets = eventId != null ?
+                (status == null ?
+                        ticketRepository.findByEventId(eventId, PageRequest.of(page, size)) :
+                        ticketRepository.findByEventIdAndStatus(eventId, status, PageRequest.of(page, size))) :
+                (status == null ?
+                        ticketRepository.findAll(PageRequest.of(page, size)) :
+                        ticketRepository.findByStatus(status, PageRequest.of(page, size)));
+        return enrichTicketData(tickets, token, "ADMIN");
+    }
+
+    public List<TicketDetail> getTicketsByTransactionId(String transactionId, String token) {
+        List<Ticket> tickets = ticketRepository.findByTransactionId(transactionId);
+        return tickets.stream().map(ticket -> {
+            AreaDetailDto areaDetail = eventClient.getAreaDetail(ticket.getEventId(), ticket.getAreaId(), token);
+            EventInfo eventInfo = eventClient.getEventInfo(ticket.getEventId(), token);
+
+            TicketDetail dto = new TicketDetail();
+            dto.setTicketCode(ticket.getTicketCode());
+            dto.setStatus(ticket.getStatus());
+            dto.setPurchaseDate(ticket.getPurchaseDate() != null ? ticket.getPurchaseDate().toString() : null);
+            dto.setPrice(ticket.getPrice());
+            dto.setEventName(eventInfo != null ? eventInfo.getName() : "Sự kiện không xác định");
+            dto.setAreaName(areaDetail != null ? areaDetail.getName() : "Khu vực không xác định");
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    private List<TicketResponse> enrichTicketData(Page<Ticket> tickets, String token, String role) {
+        return tickets.stream().map(ticket -> {
+            EventPublicDetailDto eventDetail = fetchEventDetail(ticket.getEventId(), token);
+            AreaResponseDto areaDetail = fetchAreaDetail(ticket.getEventId(), ticket.getAreaId(), token);
+
+            UserResponseDto user = null;
+            if (!"USER".equals(role)) {
+                user = fetchUserDetail(ticket.getUserId(), token);
+            }
+
+            SellingPhaseResponse phase = ticket.getPhaseId() != null ?
+                    fetchSellingPhase(ticket.getEventId(), ticket.getPhaseId(), token) : null;
+
+            TicketResponse response = new TicketResponse();
+            response.setTicketCode(ticket.getTicketCode());
+            response.setStatus(ticket.getStatus());
+            response.setPurchaseDate(ticket.getPurchaseDate() != null ? ticket.getPurchaseDate().toString() : null);
+            response.setPrice(ticket.getPrice());
+            response.setTransactionId(ticket.getTransactionId());
+            response.setEventName(eventDetail != null ? eventDetail.getName() : "Sự kiện không xác định");
+            response.setAreaName(areaDetail != null ? areaDetail.getName() : "Khu vực không xác định");
+            response.setPhaseStartTime(phase != null ? phase.getStartTime().toString() : null);
+            response.setPhaseEndTime(phase != null ? phase.getEndTime().toString() : null);
+
+            if (!"USER".equals(role)) {
+                response.setUserFullName(user != null ? user.getFullName() : "Người dùng không xác định");
+                response.setUserEmail(user != null ? user.getEmail() : "Email không xác định");
+            }
+
+            if ("ADMIN".equals(role)) {
+                response.setTicketId(ticket.getTicketId());
+                response.setEventId(ticket.getEventId());
+                response.setAreaId(ticket.getAreaId());
+                response.setPhaseId(ticket.getPhaseId());
+                response.setUserId(ticket.getUserId());
+            }
+
+            return response;
+        }).collect(Collectors.toList());
+    }
+
+    private EventPublicDetailDto fetchEventDetail(Integer eventId, String token) {
+        try {
+            return eventClient.getPublicEventDetail(eventId, token);
+        } catch (Exception e) {
+            logger.error("Lỗi khi lấy thông tin sự kiện {}: {}", eventId, e.getMessage());
+            return null;
+        }
+    }
+
+    private AreaResponseDto fetchAreaDetail(Integer eventId, Integer areaId, String token) {
+        try {
+            AreaDetailDto areaDetail = eventClient.getAreaDetail(eventId, areaId, token);
+            if (areaDetail == null) {
+                return null;
+            }
+
+            // Convert AreaDetailDto to AreaResponseDto
+            AreaResponseDto areaResponse = new AreaResponseDto();
+            areaResponse.setAreaId(areaDetail.getAreaId());
+            areaResponse.setEventId(eventId);
+            areaResponse.setName(areaDetail.getName());
+            areaResponse.setTotalTickets(areaDetail.getTotalTickets());
+            areaResponse.setAvailableTickets(areaDetail.getAvailableTickets());
+            areaResponse.setPrice(areaDetail.getPrice());
+
+            return areaResponse;
+        } catch (Exception e) {
+            logger.error("Lỗi khi lấy thông tin khu vực {}: {}", areaId, e.getMessage());
+            return null;
+        }
+    }
+
+    private UserResponseDto fetchUserDetail(Integer userId, String token) {
+        try {
+            return identityClient.getUserDetail(userId, token);
+        } catch (Exception e) {
+            logger.error("Lỗi khi lấy thông tin người dùng {}: {}", userId, e.getMessage());
+            return null;
+        }
+    }
+
+    private SellingPhaseResponse fetchSellingPhase(Integer eventId, Integer phaseId, String token) {
+        SellingPhaseResponse[] phases = eventClient.getSellingPhases(eventId, token);
+        return Arrays.stream(phases)
+                .filter(p -> p.getPhaseId().equals(phaseId))
+                .findFirst()
+                .orElse(null);
     }
 
     public void releaseHeldTickets(String holdKey) {

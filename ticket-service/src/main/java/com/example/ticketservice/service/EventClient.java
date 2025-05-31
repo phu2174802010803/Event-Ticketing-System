@@ -18,6 +18,15 @@ public class EventClient {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
+    public EventPublicDetailDto getPublicEventDetail(Integer eventId, String token) {
+        String url = eventServiceUrl + "/api/events/public/" + eventId;
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + token);
+        HttpEntity<String> entity = new HttpEntity<>(headers);
+        ResponseEntity<EventPublicDetailDto> response = restTemplate.exchange(url, HttpMethod.GET, entity, EventPublicDetailDto.class);
+        return response.getBody();
+    }
+
     public AreaDetailDto getAreaDetail(Integer eventId, Integer areaId, String token) {
         String url = eventServiceUrl + "/api/events/" + eventId + "/areas/" + areaId;
         HttpHeaders headers = new HttpHeaders();

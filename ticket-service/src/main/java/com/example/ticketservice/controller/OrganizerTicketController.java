@@ -16,15 +16,17 @@ public class OrganizerTicketController {
     @Autowired
     private TicketService ticketService;
 
-    @GetMapping("/tickets/history")
-    public ResponseEntity<ResponseWrapper<List<TicketHistoryResponse>>> getTicketHistory(
+    @GetMapping("/tickets")
+    public ResponseEntity<ResponseWrapper<List<TicketResponse>>> getTickets(
             @RequestParam Integer eventId,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            @RequestHeader("Authorization") String authorizationHeader) {
         Integer organizerId = Integer.parseInt((String) SecurityContextHolder.getContext().getAuthentication().getPrincipal());
-        List<TicketHistoryResponse> history = ticketService.getTicketHistoryForOrganizer(organizerId, eventId, status, page, size);
-        return ResponseEntity.ok(new ResponseWrapper<>("success", "Lịch sử vé của sự kiện", history));
+        String token = authorizationHeader.substring(7);
+        List<TicketResponse> tickets = ticketService.getOrganizerTickets(organizerId, eventId, status, page, size, token);
+        return ResponseEntity.ok(new ResponseWrapper<>("success", "Danh sách vé của sự kiện", tickets));
     }
 
     @PostMapping("/tickets/scan")

@@ -16,14 +16,25 @@ public class AdminTicketController {
     @Autowired
     private TicketService ticketService;
 
-    @GetMapping("/tickets/history")
-    public ResponseEntity<ResponseWrapper<List<TicketHistoryResponse>>> getAllTickets(
+    @GetMapping("/tickets")
+    public ResponseEntity<ResponseWrapper<List<TicketResponse>>> getTickets(
             @RequestParam(required = false) Integer eventId,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        List<TicketHistoryResponse> history = ticketService.getAllTickets(eventId, status, page, size, "ADMIN");
-        return ResponseEntity.ok(new ResponseWrapper<>("success", "Danh sách tất cả vé", history));
+            @RequestParam(defaultValue = "10") int size,
+            @RequestHeader("Authorization") String authorizationHeader) {
+        String token = authorizationHeader.substring(7);
+        List<TicketResponse> tickets = ticketService.getAdminTickets(eventId, status, page, size, token);
+        return ResponseEntity.ok(new ResponseWrapper<>("success", "Danh sách tất cả vé", tickets));
+    }
+
+    @GetMapping("/tickets/by-transaction")
+    public ResponseEntity<List<TicketDetail>> getTicketsByTransactionId(
+            @RequestParam String transactionId,
+            @RequestHeader("Authorization") String authorizationHeader) {
+        String token = authorizationHeader.substring(7);
+        List<TicketDetail> tickets = ticketService.getTicketsByTransactionId(transactionId, token);
+        return ResponseEntity.ok(tickets);
     }
 
     @PostMapping("/tickets/scan")

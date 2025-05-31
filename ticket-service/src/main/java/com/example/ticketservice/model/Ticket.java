@@ -37,11 +37,8 @@ public class Ticket {
     @Column(name = "ticket_code", unique = true, nullable = false)
     private String ticketCode;
 
-    @Column(name = "event_name", nullable = false)
-    private String eventName;
-
-    @Column(name = "area_name", nullable = false)
-    private String areaName;
+    @Column(name = "transaction_id")
+    private String transactionId;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();

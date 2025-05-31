@@ -50,20 +50,22 @@ public class TicketController {
         return ResponseEntity.ok(response); // Trả về 200 OK với body JSON
     }
 
-    @GetMapping("/history")
-    public ResponseEntity<ResponseWrapper<List<TicketHistoryResponse>>> getTicketHistory(
-            @RequestParam(required = false) String status,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        Integer userId = Integer.parseInt((String) SecurityContextHolder.getContext().getAuthentication().getPrincipal());
-        List<TicketHistoryResponse> history = ticketService.getTicketHistory(userId, status, page, size, "USER");
-        return ResponseEntity.ok(new ResponseWrapper<>("success", "Lịch sử vé của bạn", history));
-    }
-
     @GetMapping("/{ticketId}/qr")
     public ResponseEntity<ResponseWrapper<TicketQRResponse>> getTicketQR(@PathVariable Integer ticketId) {
         Integer userId = Integer.parseInt((String) SecurityContextHolder.getContext().getAuthentication().getPrincipal());
         TicketQRResponse qrResponse = ticketService.getTicketQR(ticketId, userId, "USER");
         return ResponseEntity.ok(new ResponseWrapper<>("success", "Mã QR của vé", qrResponse));
+    }
+
+    @GetMapping
+    public ResponseEntity<ResponseWrapper<List<TicketResponse>>> getTickets(
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String authorizationHeader) {
+        Integer userId = Integer.parseInt((String) SecurityContextHolder.getContext().getAuthentication().getPrincipal());
+        String token = authorizationHeader.substring(7);
+        List<TicketResponse> tickets = ticketService.getUserTickets(userId, status, page, size, token);
+        return ResponseEntity.ok(new ResponseWrapper<>("success", "Danh sách vé của bạn", tickets));
     }
 }
