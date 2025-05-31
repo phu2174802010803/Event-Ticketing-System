@@ -14,7 +14,12 @@ public interface TransactionRepository extends JpaRepository<Transaction, String
     Optional<Transaction> findByTransactionId(String transactionId);
 
     Page<Transaction> findByEventIdIn(List<Integer> eventIds, Pageable pageable);
+
     Page<Transaction> findAll(Pageable pageable);
+
+    Page<Transaction> findByUserId(Integer userId, Pageable pageable);
+
+    List<Transaction> findByUserId(Integer userId);
 
     @Query("SELECT SUM(t.totalAmount), COUNT(t) FROM Transaction t WHERE t.transactionDate BETWEEN :startDate AND :endDate")
     Object[] calculateFinancialSummary(LocalDateTime startDate, LocalDateTime endDate);

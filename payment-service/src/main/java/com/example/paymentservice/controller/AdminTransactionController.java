@@ -3,6 +3,7 @@ package com.example.paymentservice.controller;
 import com.example.paymentservice.dto.FinancialReportDto;
 import com.example.paymentservice.dto.ResponseWrapper;
 import com.example.paymentservice.dto.TransactionResponseDto;
+import com.example.paymentservice.dto.TransactionDetail;
 import com.example.paymentservice.model.Transaction;
 import com.example.paymentservice.service.PaymentService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,12 +23,33 @@ public class AdminTransactionController {
     private PaymentService paymentService;
 
     @GetMapping("/transactions")
-    public ResponseEntity<ResponseWrapper<List<TransactionResponseDto>>> getAllTransactions(
+    public ResponseEntity<ResponseWrapper<List<TransactionDetail>>> getAllTransactions(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) Integer userId,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
+
+        // Nếu có userId parameter, trả về transactions với tickets
+        if (userId != null) {
+            String token = authorizationHeader != null ? authorizationHeader.substring(7) : "";
+            List<TransactionDetail> data = paymentService.getTransactionsWithTicketsByUserId(userId, token);
+            return ResponseEntity.ok(new ResponseWrapper<>("success", "All transactions retrieved successfully", data));
+        }
+
+        // Nếu không có userId, trả về tất cả transactions (backward compatibility)
         Page<Transaction> transactions = paymentService.getAllTransactions(page, size);
-        List<TransactionResponseDto> data = transactions.stream()
-                .map(paymentService::toResponseDto)
+        List<TransactionDetail> data = transactions.stream()
+                .map(transaction -> {
+                    TransactionDetail dto = new TransactionDetail();
+                    dto.setTransactionId(transaction.getTransactionId());
+                    dto.setEventId(transaction.getEventId());
+                    dto.setTotalAmount(transaction.getTotalAmount());
+                    dto.setPaymentMethod(transaction.getPaymentMethod());
+                    dto.setStatus(transaction.getStatus());
+                    dto.setTransactionDate(transaction.getTransactionDate().toString());
+                    dto.setTickets(null); // No tickets for general list
+                    return dto;
+                })
                 .collect(Collectors.toList());
         return ResponseEntity.ok(new ResponseWrapper<>("success", "All transactions retrieved successfully", data));
     }
@@ -36,7 +58,8 @@ public class AdminTransactionController {
     public ResponseEntity<ResponseWrapper<TransactionResponseDto>> getTransaction(
             @PathVariable String transactionId) {
         Transaction transaction = paymentService.getTransactionById(transactionId);
-        return ResponseEntity.ok(new ResponseWrapper<>("success", "Transaction retrieved successfully", paymentService.toResponseDto(transaction)));
+        return ResponseEntity.ok(new ResponseWrapper<>("success", "Transaction retrieved successfully",
+                paymentService.toResponseDto(transaction)));
     }
 
     @GetMapping("/reports/financial")

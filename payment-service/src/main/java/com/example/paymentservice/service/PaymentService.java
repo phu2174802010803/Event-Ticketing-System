@@ -23,6 +23,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class PaymentService {
@@ -32,6 +33,9 @@ public class PaymentService {
 
     @Autowired
     private EventClient eventClient;
+
+    @Autowired
+    private TicketClient ticketClient;
 
     @Autowired
     private KafkaTemplate<String, PaymentConfirmationEvent> kafkaTemplate;
@@ -179,6 +183,25 @@ public class PaymentService {
         report.setTotalTransactions(totalTransactions.intValue());
         report.setAverageTransactionAmount(totalTransactions > 0 ? totalRevenue / totalTransactions : 0.0);
         return report;
+    }
+
+    public Page<Transaction> getTransactionsByUserId(Integer userId, int page, int size) {
+        return transactionRepository.findByUserId(userId, PageRequest.of(page, size));
+    }
+
+    public List<TransactionDetail> getTransactionsWithTicketsByUserId(Integer userId, String token) {
+        List<Transaction> transactions = transactionRepository.findByUserId(userId);
+        return transactions.stream().map(transaction -> {
+            TransactionDetail dto = new TransactionDetail();
+            dto.setTransactionId(transaction.getTransactionId());
+            dto.setEventId(transaction.getEventId());
+            dto.setTotalAmount(transaction.getTotalAmount());
+            dto.setPaymentMethod(transaction.getPaymentMethod());
+            dto.setStatus(transaction.getStatus());
+            dto.setTransactionDate(transaction.getTransactionDate().toString());
+            dto.setTickets(ticketClient.getTicketsByTransactionId(transaction.getTransactionId(), token));
+            return dto;
+        }).collect(Collectors.toList());
     }
 
     public TransactionResponseDto toResponseDto(Transaction transaction) {
