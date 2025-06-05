@@ -8,4 +8,5 @@ public class TicketSelectionResponse {
     private String eventName;
     private String areaName;
     private String message;
+    private Long ttl; // Time to live in seconds
 }

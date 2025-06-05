@@ -102,7 +102,8 @@ public class TicketService {
         if (activePhase == null) {
             throw new IllegalArgumentException("Phiên bán vé không tồn tại hoặc không áp dụng cho khu vực này");
         }
-        if (activePhase.getStartTime().isAfter(LocalDateTime.now()) || activePhase.getEndTime().isBefore(LocalDateTime.now())) {
+        if (activePhase.getStartTime().isAfter(LocalDateTime.now())
+                || activePhase.getEndTime().isBefore(LocalDateTime.now())) {
             throw new IllegalArgumentException("Phiên bán vé không trong thời gian hoạt động");
         }
         if (activePhase.getTicketsAvailable() < request.getQuantity()) {
@@ -115,28 +116,79 @@ public class TicketService {
             throw new IllegalArgumentException("Số lượng vé tối đa là " + MAX_TICKETS_PER_TRANSACTION);
         }
 
-        // Kiểm tra vé đã giữ ở khu vực khác
-        String holdPattern = "ticket:hold:" + userId + ":" + request.getEventId() + ":*";
-        Set<String> existingHolds = redisTemplate.keys(holdPattern);
-        if (!existingHolds.isEmpty()) {
-            for (String holdKey : existingHolds) {
-                String[] parts = holdKey.split(":");
-                Integer heldAreaId = Integer.parseInt(parts[3]);
-                if (!heldAreaId.equals(request.getAreaId())) {
-                    throw new IllegalArgumentException("Bạn chỉ được chọn vé từ một khu vực trong một giao dịch");
-                }
+        // Kiểm tra transaction hiện tại của người dùng cho sự kiện này
+        String transactionPattern = "transaction:*";
+        Set<String> transactionKeys = redisTemplate.keys(transactionPattern);
+        String currentTransactionId = null;
+        String existingTransactionKey = null;
+
+        for (String key : transactionKeys) {
+            String holdKey = redisTemplate.opsForValue().get(key);
+            if (holdKey != null && holdKey.contains("ticket:hold:" + userId + ":" + request.getEventId())) {
+                currentTransactionId = key.split(":")[1];
+                existingTransactionKey = key;
+                break;
             }
         }
 
-        // Tạo holdKey và transactionId
-        String holdKey = "ticket:hold:" + userId + ":" + request.getEventId() + ":" + request.getAreaId() + ":" + request.getPhaseId();
-        String transactionId = UUID.randomUUID().toString();
-        String transactionKey = "transaction:" + transactionId;
+        boolean isNewTransaction = currentTransactionId == null;
+        if (isNewTransaction) {
+            // Tạo transactionId mới nếu chưa có
+            currentTransactionId = UUID.randomUUID().toString();
+        }
+
+        // Kiểm tra vé đã giữ ở khu vực khác và giải phóng nếu cần
+        String holdPattern = "ticket:hold:" + userId + ":" + request.getEventId() + ":*";
+        Set<String> existingHolds = redisTemplate.keys(holdPattern);
+        for (String holdKey : existingHolds) {
+            String[] parts = holdKey.split(":");
+            Integer heldAreaId = Integer.parseInt(parts[3]);
+            if (!heldAreaId.equals(request.getAreaId())) {
+                releaseHeldTickets(holdKey); // Giải phóng vé từ khu vực khác
+            }
+        }
+
+        // Tạo holdKey
+        String holdKey = "ticket:hold:" + userId + ":" + request.getEventId() + ":" + request.getAreaId() + ":"
+                + request.getPhaseId();
+        String transactionKey = "transaction:" + currentTransactionId;
 
         // Tạm giữ vé trong Redis với định dạng "quantity:price:event_name:area_name"
-        String holdValue = request.getQuantity() + ":" + areaDetail.getPrice() + ":" + eventInfo.getName() + ":" + areaDetail.getName(); //quantity:price:event_name:area_name
-        redisTemplate.opsForValue().set(holdKey, holdValue, HOLD_TIME_MINUTES, TimeUnit.MINUTES);
-        redisTemplate.opsForValue().set(transactionKey, holdKey, HOLD_TIME_MINUTES, TimeUnit.MINUTES);
+        String holdValue = request.getQuantity() + ":" + areaDetail.getPrice() + ":" + eventInfo.getName() + ":"
+                + areaDetail.getName();
+
+        long ttlInSeconds;
+        if (isNewTransaction) {
+            // Chỉ set TTL đầy đủ cho transaction mới
+            redisTemplate.opsForValue().set(holdKey, holdValue, HOLD_TIME_MINUTES, TimeUnit.MINUTES);
+            redisTemplate.opsForValue().set(transactionKey, holdKey, HOLD_TIME_MINUTES, TimeUnit.MINUTES);
+            ttlInSeconds = HOLD_TIME_MINUTES * 60;
+
+            // Gửi thông tin TTL đến frontend qua WebSocket chỉ cho transaction mới
+            messagingTemplate.convertAndSend("/topic/ttl/" + userId,
+                    "{\"type\":\"TTL_UPDATE\",\"ttl\":" + ttlInSeconds + "}");
+
+            logger.info("Created new transaction {} for user {} with full TTL", currentTransactionId, userId);
+        } else {
+            // Với transaction hiện tại, giữ nguyên TTL còn lại
+            Long remainingTtl = redisTemplate.getExpire(existingTransactionKey, TimeUnit.SECONDS);
+            if (remainingTtl != null && remainingTtl > 0) {
+                // Cập nhật holdKey với TTL còn lại
+                redisTemplate.opsForValue().set(holdKey, holdValue, remainingTtl, TimeUnit.SECONDS);
+                redisTemplate.opsForValue().set(transactionKey, holdKey, remainingTtl, TimeUnit.SECONDS);
+                ttlInSeconds = remainingTtl;
+
+                logger.info("Updated existing transaction {} for user {} with remaining TTL: {} seconds",
+                        currentTransactionId, userId, remainingTtl);
+            } else {
+                // Fallback nếu không lấy được TTL còn lại
+                redisTemplate.opsForValue().set(holdKey, holdValue, HOLD_TIME_MINUTES, TimeUnit.MINUTES);
+                redisTemplate.opsForValue().set(transactionKey, holdKey, HOLD_TIME_MINUTES, TimeUnit.MINUTES);
+                ttlInSeconds = HOLD_TIME_MINUTES * 60;
+
+                logger.warn("Could not get remaining TTL, using full TTL for transaction {}", currentTransactionId);
+            }
+        }
 
         // Giảm số vé tạm thời
         String availableKey = "area:available:" + request.getEventId() + ":" + request.getAreaId();
@@ -155,10 +207,11 @@ public class TicketService {
 
         // Trả về response với event_name và area_name
         TicketSelectionResponse response = new TicketSelectionResponse();
-        response.setTransactionId(transactionId);
+        response.setTransactionId(currentTransactionId);
         response.setEventName(eventInfo.getName());
         response.setAreaName(areaDetail.getName());
         response.setMessage("Chọn vé thành công, vui lòng thanh toán trong " + HOLD_TIME_MINUTES + " phút");
+        response.setTtl(ttlInSeconds);
         return response;
     }
 
@@ -198,8 +251,7 @@ public class TicketService {
                 paymentServiceUrl + "/api/payments",
                 HttpMethod.POST,
                 entity,
-                PaymentResponse.class
-        );
+                PaymentResponse.class);
 
         PaymentResponse paymentResponse = responseEntity.getBody();
         TicketPurchaseResponse response = new TicketPurchaseResponse();
@@ -343,7 +395,8 @@ public class TicketService {
 
         // Lưu kết quả vào Redis
         String cacheKey = "sales:organizer:" + eventId;
-        redisTemplate.opsForValue().set(cacheKey, String.format("%d:%d:%.2f", soldTickets, totalTickets, totalRevenue), 5, TimeUnit.MINUTES);
+        redisTemplate.opsForValue().set(cacheKey, String.format("%d:%d:%.2f", soldTickets, totalTickets, totalRevenue),
+                5, TimeUnit.MINUTES);
 
         // Xây dựng phản hồi
         EventSalesResponseDto response = new EventSalesResponseDto();
@@ -400,7 +453,8 @@ public class TicketService {
 
         // Cache system-wide stats
         String cacheKey = "sales:admin:page" + page + ":size" + size;
-        redisTemplate.opsForValue().set(cacheKey, String.format("%d:%.2f", totalSoldTickets, totalRevenue), 5, java.util.concurrent.TimeUnit.MINUTES);
+        redisTemplate.opsForValue().set(cacheKey, String.format("%d:%.2f", totalSoldTickets, totalRevenue), 5,
+                java.util.concurrent.TimeUnit.MINUTES);
 
         // Build response
         SystemSalesResponseDto response = new SystemSalesResponseDto();
@@ -441,32 +495,29 @@ public class TicketService {
 
     @Transactional(readOnly = true)
     public List<TicketResponse> getUserTickets(Integer userId, String status, int page, int size, String token) {
-        Page<Ticket> tickets = status == null ?
-                ticketRepository.findByUserId(userId, PageRequest.of(page, size)) :
-                ticketRepository.findByUserIdAndStatus(userId, status, PageRequest.of(page, size));
+        Page<Ticket> tickets = status == null ? ticketRepository.findByUserId(userId, PageRequest.of(page, size))
+                : ticketRepository.findByUserIdAndStatus(userId, status, PageRequest.of(page, size));
         return enrichTicketData(tickets, token, "USER");
     }
 
     @Transactional(readOnly = true)
-    public List<TicketResponse> getOrganizerTickets(Integer organizerId, Integer eventId, String status, int page, int size, String token) {
+    public List<TicketResponse> getOrganizerTickets(Integer organizerId, Integer eventId, String status, int page,
+                                                    int size, String token) {
         if (!eventClient.checkEventOwnership(organizerId, eventId, token)) {
             throw new IllegalStateException("Bạn không có quyền truy cập danh sách vé của sự kiện này");
         }
-        Page<Ticket> tickets = status == null ?
-                ticketRepository.findByEventId(eventId, PageRequest.of(page, size)) :
-                ticketRepository.findByEventIdAndStatus(eventId, status, PageRequest.of(page, size));
+        Page<Ticket> tickets = status == null ? ticketRepository.findByEventId(eventId, PageRequest.of(page, size))
+                : ticketRepository.findByEventIdAndStatus(eventId, status, PageRequest.of(page, size));
         return enrichTicketData(tickets, token, "ORGANIZER");
     }
 
     @Transactional(readOnly = true)
     public List<TicketResponse> getAdminTickets(Integer eventId, String status, int page, int size, String token) {
-        Page<Ticket> tickets = eventId != null ?
-                (status == null ?
-                        ticketRepository.findByEventId(eventId, PageRequest.of(page, size)) :
-                        ticketRepository.findByEventIdAndStatus(eventId, status, PageRequest.of(page, size))) :
-                (status == null ?
-                        ticketRepository.findAll(PageRequest.of(page, size)) :
-                        ticketRepository.findByStatus(status, PageRequest.of(page, size)));
+        Page<Ticket> tickets = eventId != null
+                ? (status == null ? ticketRepository.findByEventId(eventId, PageRequest.of(page, size))
+                : ticketRepository.findByEventIdAndStatus(eventId, status, PageRequest.of(page, size)))
+                : (status == null ? ticketRepository.findAll(PageRequest.of(page, size))
+                : ticketRepository.findByStatus(status, PageRequest.of(page, size)));
         return enrichTicketData(tickets, token, "ADMIN");
     }
 
@@ -497,8 +548,9 @@ public class TicketService {
                 user = fetchUserDetail(ticket.getUserId(), token);
             }
 
-            SellingPhaseResponse phase = ticket.getPhaseId() != null ?
-                    fetchSellingPhase(ticket.getEventId(), ticket.getPhaseId(), token) : null;
+            SellingPhaseResponse phase = ticket.getPhaseId() != null
+                    ? fetchSellingPhase(ticket.getEventId(), ticket.getPhaseId(), token)
+                    : null;
 
             TicketResponse response = new TicketResponse();
             response.setTicketCode(ticket.getTicketCode());
@@ -594,7 +646,8 @@ public class TicketService {
             event.setAreaId(areaId);
             event.setAvailableTickets(newAvailable.intValue());
             kafkaTemplate.send("ticket-updates", "ticketevent", event);
-            logger.info("Đã gửi sự kiện giải phóng vé: eventId={}, areaId={}, availableTickets={}", eventId, areaId, newAvailable);
+            logger.info("Đã gửi sự kiện giải phóng vé: eventId={}, areaId={}, availableTickets={}", eventId, areaId,
+                    newAvailable);
 
             // Gửi thông báo qua WebSocket
             messagingTemplate.convertAndSend("/topic/tickets/" + eventId + "/" + areaId,
