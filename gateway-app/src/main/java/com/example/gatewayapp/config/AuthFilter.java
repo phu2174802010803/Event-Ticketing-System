@@ -32,6 +32,10 @@ public class AuthFilter extends AbstractGatewayFilterFactory<AuthFilter.Config> 
     public GatewayFilter apply(Config config) {
         return (exchange, chain) -> {
             String path = exchange.getRequest().getURI().getPath();
+            // Bỏ qua xác thực cho các route WebSocket
+            if (path.startsWith("/ws") || path.startsWith("/ws-native")) {
+                return chain.filter(exchange);
+            }
             if (path.startsWith("/api/events/public") ||
                     path.startsWith("/api/register") ||
                     path.startsWith("/api/auth/login") ||
