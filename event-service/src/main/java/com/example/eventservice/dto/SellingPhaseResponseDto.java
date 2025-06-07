@@ -15,9 +15,10 @@ public class SellingPhaseResponseDto {
     private Integer ticketsAvailable;
     private String status;
     private String message;
+    private Double price;
 
     public SellingPhaseResponseDto(Integer phaseId, Integer eventId, Integer areaId, String areaName, LocalDateTime startTime,
-                                   LocalDateTime endTime, Integer ticketsAvailable, String status, String message) {
+                                   LocalDateTime endTime, Integer ticketsAvailable, String status, String message, Double price) {
         this.phaseId = phaseId;
         this.eventId = eventId;
         this.areaId = areaId;
@@ -27,5 +28,6 @@ public class SellingPhaseResponseDto {
         this.ticketsAvailable = ticketsAvailable;
         this.status = status;
         this.message = message;
+        this.price = price;
     }
 }

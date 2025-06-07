@@ -162,6 +162,11 @@ public class EventService {
                                 .orElseThrow(() -> new RuntimeException("Không tìm thấy khu vực"));
                         areaName = area.getName();
                     }
+                    // Lấy giá của khu vực từ AreaRepository
+                    Double price = areaRepository.findById(phase.getAreaId())
+                            .map(area -> area.getPrice())
+                            .orElse(0.0); // Nếu không tìm thấy khu vực, trả về 0.0
+
                     return new SellingPhaseResponseDto(
                             phase.getPhaseId(),
                             phase.getEventId(),
@@ -171,7 +176,9 @@ public class EventService {
                             phase.getEndTime(),
                             phase.getTicketsAvailable(),
                             status,
-                            null
+                            null,
+                            price
+
                     );
                 })
                 .collect(Collectors.toList());
@@ -233,6 +240,11 @@ public class EventService {
                                 .orElseThrow(() -> new RuntimeException("Không tìm thấy khu vực"));
                         areaName = area.getName();
                     }
+                    // Lấy giá của khu vực từ AreaRepository
+                    Double price = areaRepository.findById(phase.getAreaId())
+                            .map(area -> area.getPrice())
+                            .orElse(0.0); // Nếu không tìm thấy khu vực, trả về 0.0
+
                     return new SellingPhaseResponseDto(
                             phase.getPhaseId(),
                             phase.getEventId(),
@@ -242,7 +254,8 @@ public class EventService {
                             phase.getEndTime(),
                             phase.getTicketsAvailable(),
                             status,
-                            null
+                            null,
+                            price
                     );
                 })
                 .collect(Collectors.toList());
@@ -273,6 +286,11 @@ public class EventService {
                                 .orElseThrow(() -> new RuntimeException("Không tìm thấy khu vực"));
                         areaName = area.getName();
                     }
+                    // Lấy giá của khu vực từ AreaRepository
+                    Double price = areaRepository.findById(phase.getAreaId())
+                            .map(area -> area.getPrice())
+                            .orElse(0.0); // Nếu không tìm thấy khu vực, trả về 0.0
+
                     return new SellingPhaseResponseDto(
                             phase.getPhaseId(),
                             phase.getEventId(),
@@ -282,7 +300,8 @@ public class EventService {
                             phase.getEndTime(),
                             phase.getTicketsAvailable(),
                             status,
-                            null
+                            null,
+                            price
                     );
                 })
                 .collect(Collectors.toList());
@@ -502,6 +521,10 @@ public class EventService {
                     .orElseThrow(() -> new RuntimeException("Không tìm thấy khu vực"));
             areaName = area.getName();
         }
+        // Lấy giá của khu vực từ AreaRepository
+        Double price = areaRepository.findById(phase.getAreaId())
+                .map(area -> area.getPrice())
+                .orElse(0.0); // Nếu không tìm thấy khu vực, trả về 0.0
 
         return new SellingPhaseResponseDto(
                 savedPhase.getPhaseId(),
@@ -512,7 +535,8 @@ public class EventService {
                 savedPhase.getEndTime(),
                 savedPhase.getTicketsAvailable(),
                 status,
-                "Tạo phiên bán vé thành công"
+                "Tạo phiên bán vé thành công",
+                price
         );
     }
 
@@ -661,6 +685,10 @@ public class EventService {
                     .orElseThrow(() -> new RuntimeException("Không tìm thấy khu vực"));
             areaName = area.getName();
         }
+        // Lấy giá của khu vực từ AreaRepository
+        Double price = areaRepository.findById(phase.getAreaId())
+                .map(area -> area.getPrice())
+                .orElse(0.0); // Nếu không tìm thấy khu vực, trả về 0.0
 
         // Trả về DTO với thông tin đầy đủ
         return new SellingPhaseResponseDto(
@@ -672,7 +700,8 @@ public class EventService {
                 updatedPhase.getEndTime(),
                 updatedPhase.getTicketsAvailable(),
                 status,
-                "Cập nhật phiên bán vé thành công"
+                "Cập nhật phiên bán vé thành công",
+                price
         );
     }
 
