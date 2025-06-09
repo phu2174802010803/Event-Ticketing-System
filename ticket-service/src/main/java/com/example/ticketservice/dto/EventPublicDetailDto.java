@@ -1,7 +1,8 @@
 package com.example.ticketservice.dto;
 
 import lombok.Data;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.LocalTime;
 
 @Data
 public class EventPublicDetailDto {
@@ -9,10 +10,12 @@ public class EventPublicDetailDto {
     private String name;
     private String description;
     private String location;
-    private LocalDateTime startDate;
-    private LocalDateTime endDate;
+    private LocalDate date;
+    private LocalTime time;
     private String status;
     private String imageUrl;
+    private String bannerUrl;
     private Integer organizerId;
     private String organizerName;
+    private String organizerEmail;
 }

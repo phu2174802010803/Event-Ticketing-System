@@ -20,4 +20,8 @@ public class TicketResponse {
     private Integer areaId;            // ID khu vực (chỉ cho Admin)
     private Integer phaseId;           // ID phiên bán vé (chỉ cho Admin)
     private Integer userId;            // ID người dùng (chỉ cho Admin)
+    private String eventDate;          // Ngày sự kiện
+    private String eventTime;          // Giờ sự kiện
+    private String eventLocation;      // Địa điểm sự kiện
+    private String paymentMethod;      // Phương thức thanh toán
 }

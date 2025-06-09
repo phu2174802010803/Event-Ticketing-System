@@ -41,6 +41,9 @@ public class TicketService {
     private IdentityClient identityClient;
 
     @Autowired
+    private PaymentClient paymentClient;
+
+    @Autowired
     private TicketRepository ticketRepository;
 
     @Autowired
@@ -242,7 +245,7 @@ public class TicketService {
         PaymentRequest paymentRequest = new PaymentRequest();
         paymentRequest.setTransactionId(request.getTransactionId());
         paymentRequest.setAmount(totalAmount);
-        paymentRequest.setPaymentMethod("bank");
+        paymentRequest.setPaymentMethod("Thanh toán VNPay");
         paymentRequest.setEventId(eventId);
         HttpEntity<PaymentRequest> entity = new HttpEntity<>(paymentRequest, headers);
 
@@ -527,13 +530,21 @@ public class TicketService {
             AreaDetailDto areaDetail = eventClient.getAreaDetail(ticket.getEventId(), ticket.getAreaId(), token);
             EventInfo eventInfo = eventClient.getEventInfo(ticket.getEventId(), token);
 
+            SellingPhaseResponse phase = ticket.getPhaseId() != null
+                    ? fetchSellingPhase(ticket.getEventId(), ticket.getPhaseId(), token)
+                    : null;
+
             TicketDetail dto = new TicketDetail();
+            dto.setTicketId(ticket.getTicketId());
             dto.setTicketCode(ticket.getTicketCode());
             dto.setStatus(ticket.getStatus());
             dto.setPurchaseDate(ticket.getPurchaseDate() != null ? ticket.getPurchaseDate().toString() : null);
             dto.setPrice(ticket.getPrice());
             dto.setEventName(eventInfo != null ? eventInfo.getName() : "Sự kiện không xác định");
             dto.setAreaName(areaDetail != null ? areaDetail.getName() : "Khu vực không xác định");
+            dto.setPhaseStartTime(phase != null ? phase.getStartTime().toString() : null);
+            dto.setPhaseEndTime(phase != null ? phase.getEndTime().toString() : null);
+
             return dto;
         }).collect(Collectors.toList());
     }
@@ -542,6 +553,7 @@ public class TicketService {
         return tickets.stream().map(ticket -> {
             EventPublicDetailDto eventDetail = fetchEventDetail(ticket.getEventId(), token);
             AreaResponseDto areaDetail = fetchAreaDetail(ticket.getEventId(), ticket.getAreaId(), token);
+            TransactionResponseDto transactionDetail = fetchTransactionDetail(ticket.getTransactionId(), token);
 
             UserResponseDto user = null;
             if (!"USER".equals(role)) {
@@ -562,6 +574,20 @@ public class TicketService {
             response.setAreaName(areaDetail != null ? areaDetail.getName() : "Khu vực không xác định");
             response.setPhaseStartTime(phase != null ? phase.getStartTime().toString() : null);
             response.setPhaseEndTime(phase != null ? phase.getEndTime().toString() : null);
+
+            if (eventDetail != null) {
+                // Kiểm tra và set event date và time
+                if (eventDetail.getDate() != null) {
+                    response.setEventDate(eventDetail.getDate().toString());
+                }
+                if (eventDetail.getTime() != null) {
+                    response.setEventTime(eventDetail.getTime().toString());
+                }
+                response.setEventLocation(eventDetail.getLocation());
+            }
+            if (transactionDetail != null) {
+                response.setPaymentMethod(transactionDetail.getPaymentMethod());
+            }
 
             if (!"USER".equals(role)) {
                 response.setUserFullName(user != null ? user.getFullName() : "Người dùng không xác định");
@@ -627,6 +653,15 @@ public class TicketService {
                 .filter(p -> p.getPhaseId().equals(phaseId))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private TransactionResponseDto fetchTransactionDetail(String transactionId, String token) {
+        try {
+            return paymentClient.getTransactionDetail(transactionId, token);
+        } catch (Exception e) {
+            logger.error("Lỗi khi lấy thông tin giao dịch {}: {}", transactionId, e.getMessage());
+            return null;
+        }
     }
 
     public void releaseHeldTickets(String holdKey) {
