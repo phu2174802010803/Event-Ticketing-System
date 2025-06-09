@@ -8,10 +8,14 @@ spring:
   cloud:
     gateway:
       routes:
-        - id: identity-service
+        - id: identity-service-organizer
           uri: http://localhost:8081
           predicates:
-            - Path=/api/organizer/register, /api/admin/users/**, /api/auth/**
+            - Path=/api/auth/**, /api/organizer/register, /api/organizer/profile/**
+        - id: identity-service-admin
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/auth/**, /api/admin/users/**
         - id: event-service-organizer
           uri: http://localhost:8083
           predicates:
