@@ -16,6 +16,10 @@ public class UserResponseDto {
     private LocalDateTime createdAt;
     private Boolean isActive;
 
+    // Constructor mặc định
+    public UserResponseDto() {
+    }
+
     public UserResponseDto(Integer userId, String username, String email, String fullName, String phone,
                            String address, String role, LocalDateTime createdAt, Boolean isActive) {
         this.userId = userId;
@@ -31,5 +35,12 @@ public class UserResponseDto {
 
     // Constructor cũ để backward compatibility
     public UserResponseDto(Integer userId, String username, String email, String fullName, String phone,
-                           String address) {}
+                           String address) {
+        this.userId = userId;
+        this.username = username;
+        this.email = email;
+        this.fullName = fullName;
+        this.phone = phone;
+        this.address = address;
+    }
 }

@@ -2,9 +2,11 @@ package com.example.identityservice.service;
 
 import com.example.identityservice.dto.*;
 import com.example.identityservice.exception.RegistrationException;
+import com.example.identityservice.model.Organizer;
 import com.example.identityservice.model.PasswordResetToken;
 import com.example.identityservice.model.Role;
 import com.example.identityservice.model.User;
+import com.example.identityservice.repository.OrganizerRepository;
 import com.example.identityservice.repository.PasswordResetTokenRepository;
 import com.example.identityservice.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +30,9 @@ public class UserService {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private OrganizerRepository organizerRepository;
 
     @Autowired
     private PasswordResetTokenRepository passwordResetTokenRepository;
@@ -76,6 +81,22 @@ public class UserService {
         user.setActive(true);
 
         return userRepository.save(user);
+    }
+
+    @Transactional
+    public User registerOrganizer(OrganizerRegistrationDto registrationDto) {
+        // Đăng ký user trước
+        User user = registerUser(registrationDto);
+
+        // Tạo và lưu thông tin organizer
+        Organizer organizer = new Organizer();
+        organizer.setUserId(user.getUserId());
+        organizer.setOrganizationName(registrationDto.getOrganizationName());
+        organizer.setContactEmail(registrationDto.getContactEmail());
+        organizer.setDescription(registrationDto.getDescription());
+        organizerRepository.save(organizer);
+
+        return user;
     }
 
     // Phương thức tìm kiếm với caching
@@ -199,11 +220,16 @@ public class UserService {
             }
             user.setEmail(dto.getEmail());
         }
-        if (dto.getFullName() != null) user.setFullName(dto.getFullName());
-        if (dto.getPhone() != null) user.setPhone(dto.getPhone());
-        if (dto.getAddress() != null) user.setAddress(dto.getAddress());
-        if (dto.getRole() != null) user.setRole(Role.valueOf(dto.getRole().toUpperCase()));
-        if (dto.getIsActive() != null) user.setActive(dto.getIsActive());
+        if (dto.getFullName() != null)
+            user.setFullName(dto.getFullName());
+        if (dto.getPhone() != null)
+            user.setPhone(dto.getPhone());
+        if (dto.getAddress() != null)
+            user.setAddress(dto.getAddress());
+        if (dto.getRole() != null)
+            user.setRole(Role.valueOf(dto.getRole().toUpperCase()));
+        if (dto.getIsActive() != null)
+            user.setActive(dto.getIsActive());
         user.setUpdatedAt(LocalDateTime.now());
         User updatedUser = userRepository.save(user);
         return convertToResponseDto(updatedUser);
@@ -264,7 +290,8 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Người dùng không tồn tại"));
 
-        ResponseWrapper<List<UserTransactionHistory.TransactionDetail>> wrapper = paymentClient.getTransactionsByUserId(userId, token);
+        ResponseWrapper<List<UserTransactionHistory.TransactionDetail>> wrapper = paymentClient
+                .getTransactionsByUserId(userId, token);
         if (wrapper == null || !"success".equals(wrapper.getStatus())) {
             throw new RuntimeException("Không thể lấy lịch sử giao dịch");
         }
@@ -277,6 +304,58 @@ public class UserService {
         history.setTransactions(wrapper.getData());
 
         return history;
+    }
+
+    public OrganizerProfileDto getOrganizerProfile(Integer userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        if (user.getRole() != Role.ORGANIZER) {
+            throw new IllegalStateException("User is not an organizer");
+        }
+        Organizer organizer = organizerRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Organizer not found"));
+
+        OrganizerProfileDto dto = new OrganizerProfileDto();
+        dto.setUserId(user.getUserId());
+        dto.setUsername(user.getUsername());
+        dto.setEmail(user.getEmail());
+        dto.setFullName(user.getFullName());
+        dto.setPhone(user.getPhone());
+        dto.setAddress(user.getAddress());
+        dto.setOrganizationName(organizer.getOrganizationName());
+        dto.setContactEmail(organizer.getContactEmail());
+        dto.setDescription(organizer.getDescription());
+        return dto;
+    }
+
+    @Transactional
+    public void updateOrganizerProfile(Integer userId, OrganizerUpdateDto updateDto) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        if (user.getRole() != Role.ORGANIZER) {
+            throw new IllegalStateException("User is not an organizer");
+        }
+        Organizer organizer = organizerRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Organizer not found"));
+
+        // Cập nhật thông tin user
+        if (updateDto.getFullName() != null)
+            user.setFullName(updateDto.getFullName());
+        if (updateDto.getPhone() != null)
+            user.setPhone(updateDto.getPhone());
+        if (updateDto.getAddress() != null)
+            user.setAddress(updateDto.getAddress());
+
+        // Cập nhật thông tin organizer
+        if (updateDto.getOrganizationName() != null)
+            organizer.setOrganizationName(updateDto.getOrganizationName());
+        if (updateDto.getContactEmail() != null)
+            organizer.setContactEmail(updateDto.getContactEmail());
+        if (updateDto.getDescription() != null)
+            organizer.setDescription(updateDto.getDescription());
+
+        userRepository.save(user);
+        organizerRepository.save(organizer);
     }
 
     private UserManagementResponseDto convertToResponseDto(User user) {

@@ -45,6 +45,12 @@ public class JwtRequestFilter extends OncePerRequestFilter {
             return;
         }
 
+        // Bỏ qua xác thực cho /api/auth/google/callback
+        if ("/api/auth/google/callback".equals(path)) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         final String authorizationHeader = request.getHeader("Authorization");
         String username = null;
         String jwt = null;
