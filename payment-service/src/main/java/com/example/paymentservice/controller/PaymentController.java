@@ -2,6 +2,8 @@ package com.example.paymentservice.controller;
 
 import com.example.paymentservice.dto.PaymentRequest;
 import com.example.paymentservice.dto.PaymentResponse;
+import com.example.paymentservice.dto.ResponseWrapper;
+import com.example.paymentservice.dto.TransactionResponseDto;
 import com.example.paymentservice.service.PaymentService;
 import com.example.paymentservice.util.VNPayUtil;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,6 +58,13 @@ public class PaymentController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Lỗi xử lý thanh toán: " + e.getMessage());
         }
+    }
+
+    @GetMapping("/transactions/{transactionId}")
+    public ResponseEntity<ResponseWrapper<TransactionResponseDto>> getTransaction(
+            @PathVariable String transactionId) {
+        TransactionResponseDto transaction = paymentService.toResponseDto(paymentService.getTransactionById(transactionId));
+        return ResponseEntity.ok(new ResponseWrapper<>("success", "Transaction retrieved successfully", transaction));
     }
 
     private Map<String, String> getParamsFromRequest(HttpServletRequest request) {

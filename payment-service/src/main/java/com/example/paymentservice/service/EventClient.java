@@ -1,6 +1,7 @@
 package com.example.paymentservice.service;
 
 import com.example.paymentservice.dto.EventDto;
+import com.example.paymentservice.dto.EventPublicDetailDto;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
@@ -46,5 +47,20 @@ public class EventClient {
         return events.stream()
                 .map(EventDto::getEventId)
                 .collect(Collectors.toList());
+    }
+
+    public EventPublicDetailDto getEventPublicDetail(Integer eventId, String token) {
+        String url = eventServiceUrl + "/api/events/public/" + eventId;
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + token);
+        HttpEntity<String> entity = new HttpEntity<>(headers);
+
+        ResponseEntity<EventPublicDetailDto> response = restTemplate.exchange(
+                url,
+                HttpMethod.GET,
+                entity,
+                EventPublicDetailDto.class);
+
+        return response.getBody();
     }
 }

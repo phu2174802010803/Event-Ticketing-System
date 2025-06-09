@@ -38,6 +38,9 @@ public class PaymentService {
     private TicketClient ticketClient;
 
     @Autowired
+    private IdentityClient identityClient;
+
+    @Autowired
     private KafkaTemplate<String, PaymentConfirmationEvent> kafkaTemplate;
 
     @Autowired
@@ -134,18 +137,51 @@ public class PaymentService {
         }
     }
 
-    public Page<Transaction> getOrganizerTransactions(Integer organizerId, String token, int page, int size) {
-        List<Integer> eventIds = eventClient.getOrganizerEventIds(organizerId, token);
-        return transactionRepository.findByEventIdIn(eventIds, PageRequest.of(page, size));
-    }
-
-    public Page<Transaction> getAllTransactions(int page, int size) {
-        return transactionRepository.findAll(PageRequest.of(page, size));
-    }
-
     public Transaction getTransactionById(String transactionId) {
         return transactionRepository.findById(transactionId)
                 .orElseThrow(() -> new IllegalArgumentException("Transaction not found"));
+    }
+
+    public Page<TransactionDetail> getOrganizerTransactions(Integer organizerId, String token, int page, int size) {
+        List<Integer> eventIds = eventClient.getOrganizerEventIds(organizerId, token);
+        Page<Transaction> transactions = transactionRepository.findByEventIdIn(eventIds, PageRequest.of(page, size));
+        return transactions.map(t -> mapToTransactionDetail(t, token));
+    }
+
+    public Page<TransactionDetail> getAllTransactions(int page, int size, Integer userId, String token) {
+        Page<Transaction> transactions = userId != null
+                ? transactionRepository.findByUserId(userId, PageRequest.of(page, size))
+                : transactionRepository.findAll(PageRequest.of(page, size));
+        return transactions.map(t -> mapToTransactionDetail(t, token));
+    }
+
+    public Page<TransactionSummaryDto> getAllTransactionsSummary(int page, int size, Integer userId, String token) {
+        Page<Transaction> transactions = userId != null
+                ? transactionRepository.findByUserId(userId, PageRequest.of(page, size))
+                : transactionRepository.findAll(PageRequest.of(page, size));
+        return transactions.map(t -> mapToTransactionSummary(t, token));
+    }
+
+    public TransactionDetail getTransactionDetail(String transactionId, String token) {
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new IllegalArgumentException("Transaction not found"));
+        return mapToTransactionDetail(transaction, token);
+    }
+
+    public Page<TransactionSummaryDto> getOrganizerTransactionsSummary(Integer organizerId, String token, int page, int size) {
+        List<Integer> eventIds = eventClient.getOrganizerEventIds(organizerId, token);
+        Page<Transaction> transactions = transactionRepository.findByEventIdIn(eventIds, PageRequest.of(page, size));
+        return transactions.map(t -> mapToTransactionSummary(t, token));
+    }
+
+    public TransactionDetail getTransactionDetailForOrganizer(String transactionId, Integer organizerId, String token) {
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new IllegalArgumentException("Transaction not found"));
+        List<Integer> eventIds = eventClient.getOrganizerEventIds(organizerId, token);
+        if (!eventIds.contains(transaction.getEventId())) {
+            throw new IllegalStateException("Transaction does not belong to your events");
+        }
+        return mapToTransactionDetail(transaction, token);
     }
 
     public FinancialReportDto generateFinancialReport(LocalDateTime startDate, LocalDateTime endDate) {
@@ -185,23 +221,114 @@ public class PaymentService {
         return report;
     }
 
-    public Page<Transaction> getTransactionsByUserId(Integer userId, int page, int size) {
-        return transactionRepository.findByUserId(userId, PageRequest.of(page, size));
+    private TransactionSummaryDto mapToTransactionSummary(Transaction transaction, String token) {
+        TransactionSummaryDto summary = new TransactionSummaryDto();
+        summary.setTransactionId(transaction.getTransactionId());
+        summary.setUserId(transaction.getUserId());
+        summary.setEventId(transaction.getEventId());
+        summary.setTotalAmount(transaction.getTotalAmount());
+        summary.setPaymentMethod(transaction.getPaymentMethod());
+        summary.setStatus(transaction.getStatus());
+        summary.setTransactionDate(transaction.getTransactionDate());
+
+        // Lấy thông tin user
+        try {
+            UserResponseDto user = identityClient.getUserDetail(transaction.getUserId(), token);
+            if (user != null) {
+                summary.setUserName(user.getFullName());
+                summary.setUserEmail(user.getEmail());
+            }
+        } catch (Exception e) {
+            System.err.println("Error fetching user details: " + e.getMessage());
+        }
+
+        // Lấy thông tin event
+        try {
+            EventPublicDetailDto event = eventClient.getEventPublicDetail(transaction.getEventId(), token);
+            if (event != null) {
+                summary.setEventName(event.getName());
+                summary.setOrganizerName(event.getOrganizerName());
+                summary.setOrganizerEmail(event.getOrganizerEmail());
+            }
+        } catch (Exception e) {
+            System.err.println("Error fetching event details: " + e.getMessage());
+        }
+
+        return summary;
     }
 
-    public List<TransactionDetail> getTransactionsWithTicketsByUserId(Integer userId, String token) {
-        List<Transaction> transactions = transactionRepository.findByUserId(userId);
-        return transactions.stream().map(transaction -> {
-            TransactionDetail dto = new TransactionDetail();
-            dto.setTransactionId(transaction.getTransactionId());
-            dto.setEventId(transaction.getEventId());
-            dto.setTotalAmount(transaction.getTotalAmount());
-            dto.setPaymentMethod(transaction.getPaymentMethod());
-            dto.setStatus(transaction.getStatus());
-            dto.setTransactionDate(transaction.getTransactionDate().toString());
-            dto.setTickets(ticketClient.getTicketsByTransactionId(transaction.getTransactionId(), token));
-            return dto;
-        }).collect(Collectors.toList());
+    private TransactionDetail mapToTransactionDetail(Transaction transaction, String token) {
+        TransactionDetail detail = new TransactionDetail();
+        detail.setTransactionId(transaction.getTransactionId());
+        detail.setUserId(transaction.getUserId());
+        detail.setEventId(transaction.getEventId());
+        detail.setTotalAmount(transaction.getTotalAmount());
+        detail.setPaymentMethod(transaction.getPaymentMethod());
+        detail.setStatus(transaction.getStatus());
+        detail.setTransactionDate(transaction.getTransactionDate());
+
+        try {
+            UserResponseDto user = identityClient.getUserDetail(transaction.getUserId(), token);
+            if (user != null) {
+                detail.setUserName(user.getFullName());
+                detail.setUserEmail(user.getEmail());
+                TransactionDetail.CustomerInfo customerInfo = new TransactionDetail.CustomerInfo();
+                customerInfo.setUserId(user.getUserId());
+                customerInfo.setFullName(user.getFullName());
+                customerInfo.setEmail(user.getEmail());
+                customerInfo.setPhone(user.getPhone());
+                detail.setCustomerInfo(customerInfo);
+            }
+        } catch (Exception e) {
+            // Log lỗi nhưng không làm gián đoạn
+            System.err.println("Error fetching user details: " + e.getMessage());
+        }
+
+        try {
+            EventPublicDetailDto event = eventClient.getEventPublicDetail(transaction.getEventId(), token);
+            if (event != null) {
+                detail.setEventName(event.getName());
+                detail.setOrganizerName(event.getOrganizerName());
+                detail.setOrganizerEmail(event.getOrganizerEmail());
+                TransactionDetail.EventInfo eventInfo = new TransactionDetail.EventInfo();
+                eventInfo.setEventId(event.getEventId());
+                eventInfo.setEventName(event.getName());
+                eventInfo.setEventDate(event.getDate() != null ? event.getDate().toString() : null);
+                eventInfo.setEventTime(event.getTime() != null ? event.getTime().toString() : null);
+                eventInfo.setLocation(event.getLocation());
+                eventInfo.setStatus(event.getStatus());
+                eventInfo.setOrganizerName(event.getOrganizerName());
+                eventInfo.setOrganizerEmail(event.getOrganizerEmail());
+                detail.setEventInfo(eventInfo);
+            }
+        } catch (Exception e) {
+            System.err.println("Error fetching event details: " + e.getMessage());
+        }
+
+        try {
+            List<Object> ticketObjects = ticketClient.getTicketsByTransactionId(transaction.getTransactionId(), token);
+            List<TransactionDetail.TicketDetail> tickets = ticketObjects.stream()
+                    .map(obj -> {
+                        Map<String, Object> ticketMap = (Map<String, Object>) obj;
+                        TransactionDetail.TicketDetail ticket = new TransactionDetail.TicketDetail();
+                        ticket.setTicketId((Integer) ticketMap.get("ticketId"));
+                        ticket.setTicketCode((String) ticketMap.get("ticketCode"));
+                        ticket.setStatus((String) ticketMap.get("status"));
+                        ticket.setPrice(Double.valueOf(ticketMap.get("price").toString()));
+                        ticket.setPurchaseDate(LocalDateTime.parse((String) ticketMap.get("purchaseDate")));
+                        ticket.setAreaName((String) ticketMap.get("areaName"));
+                        ticket.setEventName((String) ticketMap.get("eventName"));
+                        ticket.setPhaseStartTime(ticketMap.get("phaseStartTime") != null ? LocalDateTime.parse((String) ticketMap.get("phaseStartTime")) : null);
+                        ticket.setPhaseEndTime(ticketMap.get("phaseEndTime") != null ? LocalDateTime.parse((String) ticketMap.get("phaseEndTime")) : null);
+                        return ticket;
+                    })
+                    .collect(Collectors.toList());
+            detail.setTickets(tickets);
+        } catch (Exception e) {
+            System.err.println("Error fetching ticket details: " + e.getMessage());
+        }
+
+        return detail;
     }
 
     public TransactionResponseDto toResponseDto(Transaction transaction) {
