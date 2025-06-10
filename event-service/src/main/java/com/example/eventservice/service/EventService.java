@@ -42,6 +42,9 @@ public class EventService {
     private SpacesStorageService spacesStorageService;
 
     @Autowired
+    private IdentityClient identityClient;
+
+    @Autowired
     private RedisTemplate<String, String> redisTemplate;
 
     public MapDetailDto getEventMap(Integer eventId, Integer userId) {
@@ -849,6 +852,7 @@ public class EventService {
         dto.setImageUrl(event.getImageUrl());
         dto.setBannerUrl(event.getBannerUrl());
         dto.setCategory(categoryService.getCategoryById(event.getCategoryId()));
+        dto.setOrganizer(identityClient.getUserPublicInfo(event.getOrganizerId()));
         return dto;
     }
 }

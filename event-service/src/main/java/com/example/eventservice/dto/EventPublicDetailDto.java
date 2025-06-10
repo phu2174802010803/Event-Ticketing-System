@@ -16,5 +16,6 @@ public class EventPublicDetailDto {
     private String imageUrl;      // URL hình ảnh
     private String bannerUrl;      // URL banner
     private CategoryResponseDto category; // Thông tin danh mục
+    private OrganizerPublicDto organizer;
     private List<SellingPhaseResponseDto> sellingPhases;
 }
