@@ -27,11 +27,11 @@ spring:
         - id: ticket-service-organizer
           uri: http://localhost:8084
           predicates:
-            - Path=/api/organizer/tickets/**
+            - Path=/api/organizer/tickets/**, /api/organizer/tickets/events/**
         - id: ticket-service-admin
           uri: http://localhost:8084
           predicates:
-            - Path=/api/admin/tickets/**
+            - Path=/api/admin/tickets/**, /api/admin/tickets/events/**
         - id: payment-service-organizer
           uri: http://localhost:8086
           predicates:
