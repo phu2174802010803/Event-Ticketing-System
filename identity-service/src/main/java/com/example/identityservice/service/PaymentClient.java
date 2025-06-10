@@ -26,15 +26,15 @@ public class PaymentClient {
     }
 
     public ResponseWrapper<List<TransactionDetail>> getTransactionsByUserId(Integer userId, String token) {
-        String url = paymentServiceUrl + "/api/admin/transactions?userId=" + userId;
+        String url = paymentServiceUrl + "/api/admin/transactions/details?userId=" + userId;
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + token);
         HttpEntity<String> entity = new HttpEntity<>(headers);
 
         ResponseEntity<ResponseWrapper<List<TransactionDetail>>> response = restTemplate.exchange(
                 url, HttpMethod.GET, entity,
-                new ParameterizedTypeReference<ResponseWrapper<List<TransactionDetail>>>() {}
-        );
+                new ParameterizedTypeReference<ResponseWrapper<List<TransactionDetail>>>() {
+                });
         return response.getBody();
     }
 }
