@@ -65,7 +65,7 @@ public class MapTemplateService {
         List<TemplateAreaResponseDto> areaDtos = savedTemplate.getAreas().stream()
                 .map(area -> new TemplateAreaResponseDto(area.getTemplateAreaId(), area.getName(),
                         area.getX(), area.getY(), area.getWidth(), area.getHeight(),
-                        area.getVertices(), area.getZone(), area.getFillColor()))
+                        area.getVertices(), area.getZone(), area.getFillColor(), area.isStage()))
                 .collect(Collectors.toList());
 
         return new MapTemplateResponseDto(
@@ -103,7 +103,7 @@ public class MapTemplateService {
 
         return new TemplateAreaResponseDto(savedArea.getTemplateAreaId(), savedArea.getName(),
                 savedArea.getX(), savedArea.getY(), savedArea.getWidth(), savedArea.getHeight(),
-                savedArea.getVertices(), savedArea.getZone(), savedArea.getFillColor());
+                savedArea.getVertices(), savedArea.getZone(), savedArea.getFillColor(), savedArea.isStage());
     }
 
     public List<MapTemplateResponseDto> getAllTemplates() {
@@ -129,7 +129,7 @@ public class MapTemplateService {
         return template.getAreas().stream()
                 .map(area -> new TemplateAreaResponseDto(area.getTemplateAreaId(), area.getName(),
                         area.getX(), area.getY(), area.getWidth(), area.getHeight(),
-                        area.getVertices(), area.getZone(), area.getFillColor()))
+                        area.getVertices(), area.getZone(), area.getFillColor(), area.isStage()))
                 .collect(Collectors.toList());
     }
 
@@ -205,7 +205,7 @@ public class MapTemplateService {
         TemplateArea updatedArea = templateAreaRepository.save(area);
         return new TemplateAreaResponseDto(updatedArea.getTemplateAreaId(), updatedArea.getName(),
                 updatedArea.getX(), updatedArea.getY(), updatedArea.getWidth(), updatedArea.getHeight(),
-                updatedArea.getVertices(), updatedArea.getZone(), updatedArea.getFillColor());
+                updatedArea.getVertices(), updatedArea.getZone(), updatedArea.getFillColor(), updatedArea.isStage());
     }
 
     @Transactional
@@ -247,7 +247,7 @@ public class MapTemplateService {
         List<TemplateAreaResponseDto> areaDtos = template.getAreas().stream()
                 .map(area -> new TemplateAreaResponseDto(area.getTemplateAreaId(), area.getName(),
                         area.getX(), area.getY(), area.getWidth(), area.getHeight(),
-                        area.getVertices(), area.getZone(), area.getFillColor()))
+                        area.getVertices(), area.getZone(), area.getFillColor(), area.isStage()))
                 .collect(Collectors.toList());
         return new MapTemplateResponseDto(
                 template.getTemplateId(),

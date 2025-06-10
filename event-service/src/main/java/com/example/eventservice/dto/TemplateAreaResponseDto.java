@@ -14,10 +14,11 @@ public class TemplateAreaResponseDto {
     private Integer height;
     private List<Map<String, Float>> vertices; // Danh sách tọa độ
     private String zone;                       // Tên vùng
-    private String fillColor;                  // Màu sắc
+    private String fillColor; // Màu sắc
+    private boolean isStage;
 
     public TemplateAreaResponseDto(Integer templateAreaId, String name, Integer x, Integer y, Integer width, Integer height,
-                                   List<Map<String, Float>> vertices, String zone, String fillColor) {
+                                   List<Map<String, Float>> vertices, String zone, String fillColor, boolean isStage) {
         this.templateAreaId = templateAreaId;
         this.name = name;
         this.x = x;
@@ -27,5 +28,6 @@ public class TemplateAreaResponseDto {
         this.vertices = vertices;
         this.zone = zone;
         this.fillColor = fillColor;
+        this.isStage = isStage;
     }
 }
