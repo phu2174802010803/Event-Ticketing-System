@@ -31,6 +31,19 @@ public class AdminTransactionController {
                 new ResponseWrapper<>("success", "All transactions retrieved successfully", transactions.getContent()));
     }
 
+    @GetMapping("/transactions/details")
+    public ResponseEntity<ResponseWrapper<List<TransactionDetail>>> getAllTransactionsDetails(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) Integer userId,
+            @RequestHeader("Authorization") String authorizationHeader) {
+        String token = authorizationHeader.substring(7);
+        Page<TransactionDetail> transactions = paymentService.getAllTransactions(page, size, userId, token);
+        return ResponseEntity.ok(
+                new ResponseWrapper<>("success", "All transactions with details retrieved successfully",
+                        transactions.getContent()));
+    }
+
     @GetMapping("/transactions/{transactionId}")
     public ResponseEntity<ResponseWrapper<TransactionDetail>> getTransaction(
             @PathVariable String transactionId,
