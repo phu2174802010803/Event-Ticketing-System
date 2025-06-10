@@ -359,13 +359,11 @@ public class TicketService {
 
     @Transactional(readOnly = true)
     public EventSalesResponseDto getEventSalesForOrganizer(Integer eventId, Integer organizerId, String token) {
-        // Kiểm tra quyền sở hữu sự kiện
         EventInfo eventInfo = eventClient.getEventInfo(eventId, token);
         if (eventInfo == null || !eventClient.checkEventOwnership(organizerId, eventId, token)) {
             throw new IllegalArgumentException("Không tìm thấy sự kiện hoặc bạn không có quyền truy cập");
         }
 
-        // Lấy danh sách vé từ cơ sở dữ liệu
         List<Ticket> tickets = ticketRepository.findByEventId(eventId);
         int soldTickets = (int) tickets.stream()
                 .filter(t -> "sold".equals(t.getStatus()) || "used".equals(t.getStatus()))
@@ -375,12 +373,10 @@ public class TicketService {
                 .mapToDouble(Ticket::getPrice)
                 .sum();
 
-        // Lấy thông tin khu vực từ Event Service bằng endpoint Organizer
         List<AreaResponseDto> areas = eventClient.getAreasByEventForOrganizer(eventId, token);
         int totalTickets = areas.stream().mapToInt(AreaResponseDto::getTotalTickets).sum();
         int availableTickets = totalTickets - soldTickets;
 
-        // Xây dựng chi tiết bán vé theo khu vực
         List<AreaSalesDto> areaSales = areas.stream().map(area -> {
             int areaSoldTickets = (int) tickets.stream()
                     .filter(t -> t.getAreaId().equals(area.getAreaId()) &&
@@ -396,12 +392,12 @@ public class TicketService {
             return dto;
         }).collect(Collectors.toList());
 
-        // Lưu kết quả vào Redis
+        List<PhaseSalesDto> phaseSales = getPhaseSalesForEvent(eventId, tickets, token);
+
         String cacheKey = "sales:organizer:" + eventId;
         redisTemplate.opsForValue().set(cacheKey, String.format("%d:%d:%.2f", soldTickets, totalTickets, totalRevenue),
                 5, TimeUnit.MINUTES);
 
-        // Xây dựng phản hồi
         EventSalesResponseDto response = new EventSalesResponseDto();
         response.setEventId(eventId);
         response.setEventName(eventInfo.getName());
@@ -410,7 +406,83 @@ public class TicketService {
         response.setAvailableTickets(availableTickets);
         response.setTotalRevenue(totalRevenue);
         response.setAreas(areaSales);
+        response.setPhases(phaseSales);
         return response;
+    }
+
+    @Transactional(readOnly = true)
+    public EventSalesResponseDto getEventSalesForAdmin(Integer eventId, String token) {
+        EventInfo eventInfo = eventClient.getEventInfo(eventId, token);
+        if (eventInfo == null) {
+            throw new IllegalArgumentException("Không tìm thấy sự kiện");
+        }
+
+        List<Ticket> tickets = ticketRepository.findByEventId(eventId);
+        int soldTickets = (int) tickets.stream()
+                .filter(t -> "sold".equals(t.getStatus()) || "used".equals(t.getStatus()))
+                .count();
+        double totalRevenue = tickets.stream()
+                .filter(t -> "sold".equals(t.getStatus()) || "used".equals(t.getStatus()))
+                .mapToDouble(Ticket::getPrice)
+                .sum();
+
+        List<AreaResponseDto> areas = eventClient.getAreasByEventForAdmin(eventId, token);
+        int totalTickets = areas.stream().mapToInt(AreaResponseDto::getTotalTickets).sum();
+        int availableTickets = totalTickets - soldTickets;
+
+        List<AreaSalesDto> areaSales = areas.stream().map(area -> {
+            int areaSoldTickets = (int) tickets.stream()
+                    .filter(t -> t.getAreaId().equals(area.getAreaId()) &&
+                            ("sold".equals(t.getStatus()) || "used".equals(t.getStatus())))
+                    .count();
+            AreaSalesDto dto = new AreaSalesDto();
+            dto.setAreaId(area.getAreaId());
+            dto.setAreaName(area.getName());
+            dto.setTotalTickets(area.getTotalTickets());
+            dto.setSoldTickets(areaSoldTickets);
+            dto.setAvailableTickets(area.getTotalTickets() - areaSoldTickets);
+            dto.setPrice(area.getPrice());
+            return dto;
+        }).collect(Collectors.toList());
+
+        List<PhaseSalesDto> phaseSales = getPhaseSalesForEvent(eventId, tickets, token);
+
+        String cacheKey = "sales:admin:event:" + eventId;
+        redisTemplate.opsForValue().set(cacheKey, String.format("%d:%d:%.2f", soldTickets, totalTickets, totalRevenue),
+                5, TimeUnit.MINUTES);
+
+        EventSalesResponseDto response = new EventSalesResponseDto();
+        response.setEventId(eventId);
+        response.setEventName(eventInfo.getName());
+        response.setTotalTickets(totalTickets);
+        response.setSoldTickets(soldTickets);
+        response.setAvailableTickets(availableTickets);
+        response.setTotalRevenue(totalRevenue);
+        response.setAreas(areaSales);
+        response.setPhases(phaseSales);
+        return response;
+    }
+
+    private List<PhaseSalesDto> getPhaseSalesForEvent(Integer eventId, List<Ticket> tickets, String token) {
+        SellingPhaseResponse[] phases = eventClient.getSellingPhases(eventId, token);
+        return Arrays.stream(phases).map(phase -> {
+            int phaseSoldTickets = (int) tickets.stream()
+                    .filter(t -> t.getPhaseId() != null && t.getPhaseId().equals(phase.getPhaseId()) &&
+                            ("sold".equals(t.getStatus()) || "used".equals(t.getStatus())))
+                    .count();
+            double phaseRevenue = tickets.stream()
+                    .filter(t -> t.getPhaseId() != null && t.getPhaseId().equals(phase.getPhaseId()) &&
+                            ("sold".equals(t.getStatus()) || "used".equals(t.getStatus())))
+                    .mapToDouble(Ticket::getPrice)
+                    .sum();
+            PhaseSalesDto dto = new PhaseSalesDto();
+            dto.setPhaseId(phase.getPhaseId());
+            dto.setStartTime(phase.getStartTime());
+            dto.setEndTime(phase.getEndTime());
+            dto.setSoldTickets(phaseSoldTickets);
+            dto.setRevenue(phaseRevenue);
+            return dto;
+        }).collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)

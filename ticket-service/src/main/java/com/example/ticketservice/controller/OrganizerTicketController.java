@@ -48,6 +48,16 @@ public class OrganizerTicketController {
         Integer organizerId = Integer.parseInt((String) SecurityContextHolder.getContext().getAuthentication().getPrincipal());
         String token = authorizationHeader.substring(7);
         EventSalesResponseDto sales = ticketService.getEventSalesForOrganizer(eventId, organizerId, token);
-        return ResponseEntity.ok(new ResponseWrapper<>("success", "Ticket sales statistics for event", sales));
+        return ResponseEntity.ok(new ResponseWrapper<>("success", "Thống kê bán vé cho sự kiện", sales));
+    }
+
+    @GetMapping("/tickets/events/{eventId}/phase-stats")
+    public ResponseEntity<ResponseWrapper<List<PhaseSalesDto>>> getPhaseStats(
+            @PathVariable Integer eventId,
+            @RequestHeader("Authorization") String authorizationHeader) {
+        Integer organizerId = Integer.parseInt((String) SecurityContextHolder.getContext().getAuthentication().getPrincipal());
+        String token = authorizationHeader.substring(7);
+        EventSalesResponseDto sales = ticketService.getEventSalesForOrganizer(eventId, organizerId, token);
+        return ResponseEntity.ok(new ResponseWrapper<>("success", "Thống kê bán vé theo phiên cho sự kiện", sales.getPhases()));
     }
 }

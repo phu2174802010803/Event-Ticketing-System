@@ -56,6 +56,24 @@ public class AdminTicketController {
             @RequestHeader("Authorization") String authorizationHeader) {
         String token = authorizationHeader.substring(7);
         SystemSalesResponseDto sales = ticketService.getSystemSales(page, size, token);
-        return ResponseEntity.ok(new ResponseWrapper<>("success", "System-wide ticket sales statistics", sales));
+        return ResponseEntity.ok(new ResponseWrapper<>("success", "Thống kê bán vé toàn hệ thống", sales));
+    }
+
+    @GetMapping("/tickets/events/{eventId}/ticket-stats")
+    public ResponseEntity<ResponseWrapper<EventSalesResponseDto>> getEventTicketStats(
+            @PathVariable Integer eventId,
+            @RequestHeader("Authorization") String authorizationHeader) {
+        String token = authorizationHeader.substring(7);
+        EventSalesResponseDto stats = ticketService.getEventSalesForAdmin(eventId, token);
+        return ResponseEntity.ok(new ResponseWrapper<>("success", "Thống kê bán vé chi tiết cho sự kiện", stats));
+    }
+
+    @GetMapping("/tickets/events/{eventId}/phase-stats")
+    public ResponseEntity<ResponseWrapper<List<PhaseSalesDto>>> getPhaseStats(
+            @PathVariable Integer eventId,
+            @RequestHeader("Authorization") String authorizationHeader) {
+        String token = authorizationHeader.substring(7);
+        EventSalesResponseDto sales = ticketService.getEventSalesForAdmin(eventId, token);
+        return ResponseEntity.ok(new ResponseWrapper<>("success", "Thống kê bán vé theo phiên cho sự kiện", sales.getPhases()));
     }
 }

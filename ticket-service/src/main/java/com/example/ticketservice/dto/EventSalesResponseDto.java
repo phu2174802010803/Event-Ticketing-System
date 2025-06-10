@@ -13,4 +13,5 @@ public class EventSalesResponseDto {
     private Integer availableTickets;
     private Double totalRevenue;
     private List<AreaSalesDto> areas;
+    private List<PhaseSalesDto> phases; // Thêm thống kê theo phiên bán vé
 }

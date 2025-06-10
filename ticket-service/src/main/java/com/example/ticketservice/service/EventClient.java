@@ -83,6 +83,22 @@ public class EventClient {
         return wrapper != null && wrapper.getData() != null ? wrapper.getData() : Arrays.asList(new AreaResponseDto[0]);
     }
 
+    public List<AreaResponseDto> getAreasByEventForAdmin(Integer eventId, String token) {
+        String url = eventServiceUrl + "/api/admin/events/" + eventId + "/areas";
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + token);
+        HttpEntity<String> entity = new HttpEntity<>(headers);
+
+        ResponseEntity<ResponseWrapper<List<AreaResponseDto>>> response = restTemplate.exchange(
+                url,
+                HttpMethod.GET,
+                entity,
+                new ParameterizedTypeReference<ResponseWrapper<List<AreaResponseDto>>>() {
+                });
+        ResponseWrapper<List<AreaResponseDto>> wrapper = response.getBody();
+        return wrapper != null && wrapper.getData() != null ? wrapper.getData() : Arrays.asList(new AreaResponseDto[0]);
+    }
+
     public List<EventInfo> getAllEvents(String token) {
         String url = eventServiceUrl + "/api/admin/events";
         HttpHeaders headers = new HttpHeaders();
