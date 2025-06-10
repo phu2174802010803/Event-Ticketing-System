@@ -18,4 +18,5 @@ public class EventPublicDetailDto {
     private Integer organizerId;
     private String organizerName;
     private String organizerEmail;
+    private UserPublicDto organizer;
 }

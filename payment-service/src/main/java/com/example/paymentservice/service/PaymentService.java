@@ -247,8 +247,15 @@ public class PaymentService {
             EventPublicDetailDto event = eventClient.getEventPublicDetail(transaction.getEventId(), token);
             if (event != null) {
                 summary.setEventName(event.getName());
-                summary.setOrganizerName(event.getOrganizerName());
-                summary.setOrganizerEmail(event.getOrganizerEmail());
+                // Lấy thông tin organizer từ trường organizer mới
+                if (event.getOrganizer() != null) {
+                    summary.setOrganizerName(event.getOrganizer().getFullName());
+                    summary.setOrganizerEmail(event.getOrganizer().getEmail());
+                } else {
+                    // Fallback về các trường cũ nếu có
+                    summary.setOrganizerName(event.getOrganizerName());
+                    summary.setOrganizerEmail(event.getOrganizerEmail());
+                }
             }
         } catch (Exception e) {
             System.err.println("Error fetching event details: " + e.getMessage());
@@ -288,8 +295,21 @@ public class PaymentService {
             EventPublicDetailDto event = eventClient.getEventPublicDetail(transaction.getEventId(), token);
             if (event != null) {
                 detail.setEventName(event.getName());
-                detail.setOrganizerName(event.getOrganizerName());
-                detail.setOrganizerEmail(event.getOrganizerEmail());
+                // Lấy thông tin organizer từ trường organizer mới
+                String organizerName = null;
+                String organizerEmail = null;
+                if (event.getOrganizer() != null) {
+                    organizerName = event.getOrganizer().getFullName();
+                    organizerEmail = event.getOrganizer().getEmail();
+                } else {
+                    // Fallback về các trường cũ nếu có
+                    organizerName = event.getOrganizerName();
+                    organizerEmail = event.getOrganizerEmail();
+                }
+
+                detail.setOrganizerName(organizerName);
+                detail.setOrganizerEmail(organizerEmail);
+
                 TransactionDetail.EventInfo eventInfo = new TransactionDetail.EventInfo();
                 eventInfo.setEventId(event.getEventId());
                 eventInfo.setEventName(event.getName());
@@ -297,8 +317,8 @@ public class PaymentService {
                 eventInfo.setEventTime(event.getTime() != null ? event.getTime().toString() : null);
                 eventInfo.setLocation(event.getLocation());
                 eventInfo.setStatus(event.getStatus());
-                eventInfo.setOrganizerName(event.getOrganizerName());
-                eventInfo.setOrganizerEmail(event.getOrganizerEmail());
+                eventInfo.setOrganizerName(organizerName);
+                eventInfo.setOrganizerEmail(organizerEmail);
                 detail.setEventInfo(eventInfo);
             }
         } catch (Exception e) {
@@ -318,8 +338,12 @@ public class PaymentService {
                         ticket.setPurchaseDate(LocalDateTime.parse((String) ticketMap.get("purchaseDate")));
                         ticket.setAreaName((String) ticketMap.get("areaName"));
                         ticket.setEventName((String) ticketMap.get("eventName"));
-                        ticket.setPhaseStartTime(ticketMap.get("phaseStartTime") != null ? LocalDateTime.parse((String) ticketMap.get("phaseStartTime")) : null);
-                        ticket.setPhaseEndTime(ticketMap.get("phaseEndTime") != null ? LocalDateTime.parse((String) ticketMap.get("phaseEndTime")) : null);
+                        ticket.setPhaseStartTime(ticketMap.get("phaseStartTime") != null
+                                ? LocalDateTime.parse((String) ticketMap.get("phaseStartTime"))
+                                : null);
+                        ticket.setPhaseEndTime(ticketMap.get("phaseEndTime") != null
+                                ? LocalDateTime.parse((String) ticketMap.get("phaseEndTime"))
+                                : null);
                         return ticket;
                     })
                     .collect(Collectors.toList());
