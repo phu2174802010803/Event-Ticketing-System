@@ -62,6 +62,9 @@ public class TicketService {
     private KafkaTemplate<String, TicketUpdateEvent> kafkaTemplate;
 
     @Autowired
+    private KafkaTemplate<String, PhaseUpdateEvent> phaseKafkaTemplate;
+
+    @Autowired
     private KafkaTemplate<String, PaymentConfirmationEvent> deadLetterKafkaTemplate;
 
     @Value("${payment.service.url}")
@@ -70,7 +73,7 @@ public class TicketService {
     private static final Logger logger = LoggerFactory.getLogger(TicketService.class);
 
     private static final int MAX_TICKETS_PER_TRANSACTION = 4;
-    private static final int HOLD_TIME_MINUTES = 10;
+    private static final int HOLD_TIME_MINUTES = 1;
     private static final int MAX_RETRIES = 3;
 
     public TicketSelectionResponse selectTickets(TicketSelectionRequest request, Integer userId, String token) {
@@ -347,11 +350,42 @@ public class TicketService {
             logger.info("Released tickets for transactionId: {}", event.getTransactionId());
         }
 
+        // Gửi event cập nhật số vé khu vực
         TicketUpdateEvent updateEvent = new TicketUpdateEvent();
         updateEvent.setEventId(actualEventId);
         updateEvent.setAreaId(areaId);
         updateEvent.setAvailableTickets(newAvailable);
         kafkaTemplate.send("ticket-updates", updateEvent);
+
+        // Gửi event cập nhật số vé phiên bán
+        try {
+            // Lấy thông tin phiên bán từ Event Service
+            String token = "system"; // Token hệ thống để gọi internal API
+            SellingPhaseResponse[] phases = eventClient.getSellingPhases(actualEventId, token);
+
+            for (SellingPhaseResponse phase : phases) {
+                if (phase.getPhaseId().equals(phaseId)) {
+                    // Nếu thanh toán thành công - giảm số vé còn lại của phiên
+                    // Nếu thanh toán thất bại - không thay đổi (vé sẽ được trả lại tự động)
+                    int updatedPhaseTickets = phase.getTicketsAvailable();
+                    if ("completed".equals(event.getStatus())) {
+                        updatedPhaseTickets = phase.getTicketsAvailable() - quantity;
+                    }
+
+                    PhaseUpdateEvent phaseUpdateEvent = new PhaseUpdateEvent();
+                    phaseUpdateEvent.setEventId(actualEventId);
+                    phaseUpdateEvent.setPhaseId(phaseId);
+                    phaseUpdateEvent.setAvailableTickets(updatedPhaseTickets);
+                    phaseKafkaTemplate.send("phase-updates", "phaseevent", phaseUpdateEvent);
+
+                    logger.info("Sent phase update event: eventId={}, phaseId={}, availableTickets={}",
+                            actualEventId, phaseId, updatedPhaseTickets);
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Failed to send phase update event for eventId: {}, phaseId: {}", actualEventId, phaseId, e);
+        }
 
         messagingTemplate.convertAndSend("/topic/tickets/" + actualEventId + "/" + areaId,
                 new TicketUpdateResponse(areaId, newAvailable.toString(), "Ticket update successful"));
@@ -742,19 +776,49 @@ public class TicketService {
             String[] parts = holdKey.split(":");
             Integer eventId = Integer.parseInt(parts[3]);
             Integer areaId = Integer.parseInt(parts[4]);
+            Integer phaseId = parts.length > 5 ? Integer.parseInt(parts[5]) : null;
             Integer quantity = Integer.parseInt(holdData.split(":")[0]);
             String availableKey = "area:available:" + eventId + ":" + areaId;
             Long newAvailable = redisTemplate.opsForValue().increment(availableKey, quantity);
             redisTemplate.delete(holdKey);
 
-            // Gửi sự kiện cập nhật số vé đến Kafka
+            // Gửi sự kiện cập nhật số vé khu vực đến Kafka
             TicketUpdateEvent event = new TicketUpdateEvent();
             event.setEventId(eventId);
             event.setAreaId(areaId);
             event.setAvailableTickets(newAvailable.intValue());
             kafkaTemplate.send("ticket-updates", "ticketevent", event);
-            logger.info("Đã gửi sự kiện giải phóng vé: eventId={}, areaId={}, availableTickets={}", eventId, areaId,
+            logger.info("Đã gửi sự kiện giải phóng vé khu vực: eventId={}, areaId={}, availableTickets={}", eventId,
+                    areaId,
                     newAvailable);
+
+            // Gửi sự kiện cập nhật số vé phiên bán (nếu có phaseId)
+            if (phaseId != null) {
+                try {
+                    String token = "system";
+                    SellingPhaseResponse[] phases = eventClient.getSellingPhases(eventId, token);
+                    for (SellingPhaseResponse phase : phases) {
+                        if (phase.getPhaseId().equals(phaseId)) {
+                            // Khi giải phóng vé, trả lại số vé cho phiên
+                            int updatedPhaseTickets = phase.getTicketsAvailable() + quantity;
+
+                            PhaseUpdateEvent phaseUpdateEvent = new PhaseUpdateEvent();
+                            phaseUpdateEvent.setEventId(eventId);
+                            phaseUpdateEvent.setPhaseId(phaseId);
+                            phaseUpdateEvent.setAvailableTickets(updatedPhaseTickets);
+                            phaseKafkaTemplate.send("phase-updates", "phaseevent", phaseUpdateEvent);
+
+                            logger.info(
+                                    "Đã gửi sự kiện giải phóng vé phiên: eventId={}, phaseId={}, availableTickets={}",
+                                    eventId, phaseId, updatedPhaseTickets);
+                            break;
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.error("Failed to send phase release event for eventId: {}, phaseId: {}", eventId, phaseId,
+                            e);
+                }
+            }
 
             // Gửi thông báo qua WebSocket
             messagingTemplate.convertAndSend("/topic/tickets/" + eventId + "/" + areaId,
