@@ -8,6 +8,7 @@ import com.google.zxing.WriterException;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
+import jakarta.mail.MessagingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,7 @@ import org.springframework.web.client.RestTemplate;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -66,6 +68,9 @@ public class TicketService {
 
     @Autowired
     private KafkaTemplate<String, PaymentConfirmationEvent> deadLetterKafkaTemplate;
+
+    @Autowired
+    private EmailService emailService;
 
     @Value("${payment.service.url}")
     private String paymentServiceUrl;
@@ -325,6 +330,7 @@ public class TicketService {
         Integer newAvailable;
 
         if ("completed".equals(event.getStatus())) {
+            List<Ticket> createdTickets = new ArrayList<>();
             for (int i = 0; i < quantity; i++) {
                 Ticket ticket = new Ticket();
                 ticket.setEventId(actualEventId);
@@ -337,8 +343,19 @@ public class TicketService {
                 ticket.setTransactionId(event.getTransactionId());
                 String qrCodeUrl = generateQRCode(event.getUserId(), actualEventId, areaId);
                 ticket.setTicketCode(qrCodeUrl);
-                ticketRepository.save(ticket);
+                Ticket savedTicket = ticketRepository.save(ticket);
+                createdTickets.add(savedTicket);
             }
+
+            // Gửi email xác nhận vé
+            try {
+                sendTicketConfirmationEmail(createdTickets, event.getTransactionId(), eventName, areaName);
+            } catch (Exception e) {
+                logger.error("Failed to send ticket confirmation email for transactionId: {}", event.getTransactionId(),
+                        e);
+                // Không throw exception để không ảnh hưởng đến quá trình tạo vé
+            }
+
             redisTemplate.delete(holdKey);
             redisTemplate.delete(transactionKey);
             newAvailable = Integer.parseInt(redisTemplate.opsForValue().get(availableKey));
@@ -838,6 +855,81 @@ public class TicketService {
             return spacesStorageService.uploadQRCode(qrCodeBytes, fileName);
         } catch (WriterException | IOException e) {
             throw new RuntimeException("Không thể tạo mã QR: " + e.getMessage());
+        }
+    }
+
+    private void sendTicketConfirmationEmail(List<Ticket> tickets, String transactionId, String eventName,
+                                             String areaName) {
+        if (tickets.isEmpty()) {
+            return;
+        }
+
+        try {
+            // Lấy thông tin user từ ticket đầu tiên
+            Ticket firstTicket = tickets.get(0);
+            String token = "system"; // Token hệ thống để gọi internal API
+
+            // Lấy thông tin người dùng
+            UserResponseDto user = fetchUserDetail(firstTicket.getUserId(), token);
+            if (user == null || user.getEmail() == null) {
+                logger.warn("Cannot send email: User not found or email is null for userId: {}",
+                        firstTicket.getUserId());
+                return;
+            }
+
+            // Lấy thông tin sự kiện
+            EventPublicDetailDto eventDetail = fetchEventDetail(firstTicket.getEventId(), token);
+            if (eventDetail == null) {
+                logger.warn("Cannot send email: Event not found for eventId: {}", firstTicket.getEventId());
+                return;
+            }
+
+            // Lấy thông tin khu vực
+            AreaResponseDto areaDetail = fetchAreaDetail(firstTicket.getEventId(), firstTicket.getAreaId(), token);
+            String finalAreaName = (areaDetail != null) ? areaDetail.getName() : areaName;
+
+            // Tạo danh sách thông tin vé cho email
+            List<EmailService.TicketEmailInfo> ticketInfos = tickets.stream()
+                    .map(ticket -> new EmailService.TicketEmailInfo(
+                            ticket.getTicketCode(),
+                            finalAreaName,
+                            ticket.getPrice(),
+                            ticket.getPurchaseDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))))
+                    .collect(Collectors.toList());
+
+            // Tính tổng số tiền
+            double totalAmount = tickets.stream().mapToDouble(Ticket::getPrice).sum();
+
+            // Format thời gian sự kiện
+            String eventDateTime = "";
+            if (eventDetail.getDate() != null) {
+                eventDateTime = eventDetail.getDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+            }
+            if (eventDetail.getTime() != null) {
+                eventDateTime += " " + eventDetail.getTime().format(DateTimeFormatter.ofPattern("HH:mm"));
+            }
+
+            // Gửi email
+            emailService.sendTicketConfirmationEmail(
+                    user.getEmail(),
+                    user.getFullName(),
+                    eventDetail.getName(),
+                    eventDetail.getLocation(),
+                    eventDateTime,
+                    ticketInfos,
+                    transactionId,
+                    totalAmount);
+
+            logger.info("Successfully sent ticket confirmation email to: {} for transactionId: {}",
+                    user.getEmail(), transactionId);
+
+        } catch (MessagingException e) {
+            logger.error("Failed to send ticket confirmation email for transactionId: {} due to messaging error",
+                    transactionId, e);
+            throw new RuntimeException("Failed to send email", e);
+        } catch (Exception e) {
+            logger.error("Failed to send ticket confirmation email for transactionId: {}", transactionId, e);
+            throw e; // Re-throw để được xử lý ở nơi gọi
         }
     }
 }

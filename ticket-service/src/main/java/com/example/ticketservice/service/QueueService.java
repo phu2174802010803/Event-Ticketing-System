@@ -23,8 +23,8 @@ public class QueueService {
 
     private static final int MAX_ACTIVE_USERS = 1; // Giới hạn 2 người dùng đồng thời
     private static final int MAX_QUEUE_SIZE = 1;   // Hàng đợi 1000 người
-    private static final int ACCESS_TIME_MINUTES = 10; // TTL cho người dùng hoạt động
-    private static final int CONFIRMATION_INTERVAL_MINUTES = 5; // TTL cho người dùng trong hàng đợi
+    private static final int ACCESS_TIME_MINUTES = 2; // TTL cho người dùng hoạt động
+    private static final int CONFIRMATION_INTERVAL_MINUTES = 1; // TTL cho người dùng trong hàng đợi
 
     // Kiểm tra khả năng tham gia hàng đợi
     public boolean canJoinQueue(Integer eventId) {
