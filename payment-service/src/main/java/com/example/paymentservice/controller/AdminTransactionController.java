@@ -20,19 +20,21 @@ public class AdminTransactionController {
     private PaymentService paymentService;
 
     @GetMapping("/transactions")
-    public ResponseEntity<ResponseWrapper<List<TransactionSummaryDto>>> getAllTransactions(
+    public ResponseEntity<ResponseWrapper<Page<TransactionSummaryDto>>> getAllTransactions(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) Integer userId,
             @RequestHeader("Authorization") String authorizationHeader) {
         String token = authorizationHeader.substring(7);
-        Page<TransactionSummaryDto> transactions = paymentService.getAllTransactionsSummary(page, size, userId, token);
+        Page<TransactionSummaryDto> transactions = paymentService.getAllTransactionsSummary(page, size, userId,
+                token);
         return ResponseEntity.ok(
-                new ResponseWrapper<>("success", "All transactions retrieved successfully", transactions.getContent()));
+                new ResponseWrapper<>("success", "All transactions retrieved successfully",
+                        transactions));
     }
 
     @GetMapping("/transactions/details")
-    public ResponseEntity<ResponseWrapper<List<TransactionDetail>>> getAllTransactionsDetails(
+    public ResponseEntity<ResponseWrapper<Page<TransactionDetail>>> getAllTransactionsDetails(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) Integer userId,
@@ -41,7 +43,7 @@ public class AdminTransactionController {
         Page<TransactionDetail> transactions = paymentService.getAllTransactions(page, size, userId, token);
         return ResponseEntity.ok(
                 new ResponseWrapper<>("success", "All transactions with details retrieved successfully",
-                        transactions.getContent()));
+                        transactions));
     }
 
     @GetMapping("/transactions/{transactionId}")
@@ -50,7 +52,9 @@ public class AdminTransactionController {
             @RequestHeader("Authorization") String authorizationHeader) {
         String token = authorizationHeader.substring(7);
         TransactionDetail transaction = paymentService.getTransactionDetail(transactionId, token);
-        return ResponseEntity.ok(new ResponseWrapper<>("success", "Enhanced transaction details retrieved successfully", transaction));
+        return ResponseEntity.ok(
+                new ResponseWrapper<>("success", "Enhanced transaction details retrieved successfully",
+                        transaction));
     }
 
     @GetMapping("/reports/financial")
@@ -65,5 +69,13 @@ public class AdminTransactionController {
 
         FinancialReportDto report = paymentService.generateFinancialReport(start, end);
         return ResponseEntity.ok(new ResponseWrapper<>("success", "Financial report generated successfully", report));
+    }
+
+    @GetMapping("/transactions/stats")
+    public ResponseEntity<ResponseWrapper<TransactionStatsDto>> getTransactionStats(
+            @RequestHeader("Authorization") String authorizationHeader) {
+        TransactionStatsDto stats = paymentService.getAdminTransactionStats();
+        return ResponseEntity.ok(new ResponseWrapper<>("success",
+                "Transaction statistics retrieved successfully", stats));
     }
 }

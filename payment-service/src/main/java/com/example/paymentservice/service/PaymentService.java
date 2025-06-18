@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.ArrayList;
 
 @Service
 public class PaymentService {
@@ -219,6 +220,53 @@ public class PaymentService {
         report.setTotalTransactions(totalTransactions.intValue());
         report.setAverageTransactionAmount(totalTransactions > 0 ? totalRevenue / totalTransactions : 0.0);
         return report;
+    }
+
+    public TransactionStatsDto getAdminTransactionStats() {
+        // Get statistics using database aggregation
+        long totalTransactions = transactionRepository.count();
+        long completedTransactions = transactionRepository.countByStatus("completed");
+        long pendingTransactions = transactionRepository.countByStatus("pending");
+        long failedTransactions = transactionRepository.countByStatus("failed");
+
+        // Calculate revenue
+        Double totalRevenue = transactionRepository.sumAmountByStatus("completed");
+        Double pendingRevenue = transactionRepository.sumAmountByStatus("pending");
+
+        return new TransactionStatsDto(
+                totalTransactions,
+                completedTransactions,
+                pendingTransactions,
+                failedTransactions,
+                totalRevenue != null ? totalRevenue : 0.0,
+                pendingRevenue != null ? pendingRevenue : 0.0);
+    }
+
+    public TransactionStatsDto getOrganizerTransactionStats(Integer organizerId, String token) {
+        // Get organizer's event IDs
+        List<Integer> eventIds = eventClient.getOrganizerEventIds(organizerId, token);
+
+        if (eventIds.isEmpty()) {
+            return new TransactionStatsDto(0L, 0L, 0L, 0L, 0.0, 0.0);
+        }
+
+        // Get statistics for organizer's events
+        long totalTransactions = transactionRepository.countByEventIdIn(eventIds);
+        long completedTransactions = transactionRepository.countByEventIdInAndStatus(eventIds, "completed");
+        long pendingTransactions = transactionRepository.countByEventIdInAndStatus(eventIds, "pending");
+        long failedTransactions = transactionRepository.countByEventIdInAndStatus(eventIds, "failed");
+
+        // Calculate revenue
+        Double totalRevenue = transactionRepository.sumAmountByEventIdInAndStatus(eventIds, "completed");
+        Double pendingRevenue = transactionRepository.sumAmountByEventIdInAndStatus(eventIds, "pending");
+
+        return new TransactionStatsDto(
+                totalTransactions,
+                completedTransactions,
+                pendingTransactions,
+                failedTransactions,
+                totalRevenue != null ? totalRevenue : 0.0,
+                pendingRevenue != null ? pendingRevenue : 0.0);
     }
 
     private TransactionSummaryDto mapToTransactionSummary(Transaction transaction, String token) {
