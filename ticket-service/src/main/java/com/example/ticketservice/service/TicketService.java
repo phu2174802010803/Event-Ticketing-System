@@ -516,22 +516,56 @@ public class TicketService {
 
     private List<PhaseSalesDto> getPhaseSalesForEvent(Integer eventId, List<Ticket> tickets, String token) {
         SellingPhaseResponse[] phases = eventClient.getSellingPhases(eventId, token);
+
         return Arrays.stream(phases).map(phase -> {
+            // Calculate sold tickets for this phase
             int phaseSoldTickets = (int) tickets.stream()
                     .filter(t -> t.getPhaseId() != null && t.getPhaseId().equals(phase.getPhaseId()) &&
                             ("sold".equals(t.getStatus()) || "used".equals(t.getStatus())))
                     .count();
+
+            // Calculate revenue for this phase
             double phaseRevenue = tickets.stream()
                     .filter(t -> t.getPhaseId() != null && t.getPhaseId().equals(phase.getPhaseId()) &&
                             ("sold".equals(t.getStatus()) || "used".equals(t.getStatus())))
                     .mapToDouble(Ticket::getPrice)
                     .sum();
+
+            // Get area information if phase has an area
+            String areaName = "Toàn bộ sự kiện";
+            if (phase.getAreaId() != null) {
+                try {
+                    AreaResponseDto areaDetail = fetchAreaDetail(eventId, phase.getAreaId(), token);
+                    areaName = areaDetail != null ? areaDetail.getName() : "Khu vực không xác định";
+                } catch (Exception e) {
+                    areaName = "Khu vực #" + phase.getAreaId();
+                }
+            }
+
+            // Calculate available tickets
+            int availableTickets = phase.getTicketsAvailable() - phaseSoldTickets;
+
+            // Determine phase status
+            java.time.LocalDateTime now = java.time.LocalDateTime.now();
+            String status;
+            if (now.isBefore(phase.getStartTime())) {
+                status = "upcoming";
+            } else if (now.isAfter(phase.getEndTime())) {
+                status = "ended";
+            } else {
+                status = "active";
+            }
+
             PhaseSalesDto dto = new PhaseSalesDto();
             dto.setPhaseId(phase.getPhaseId());
+            dto.setAreaId(phase.getAreaId());
+            dto.setAreaName(areaName);
             dto.setStartTime(phase.getStartTime());
             dto.setEndTime(phase.getEndTime());
             dto.setSoldTickets(phaseSoldTickets);
+            dto.setAvailableTickets(Math.max(0, availableTickets));
             dto.setRevenue(phaseRevenue);
+            dto.setStatus(status);
             return dto;
         }).collect(Collectors.toList());
     }
@@ -645,6 +679,35 @@ public class TicketService {
                 : (status == null ? ticketRepository.findAll(PageRequest.of(page, size))
                 : ticketRepository.findByStatus(status, PageRequest.of(page, size)));
         return enrichTicketData(tickets, token, "ADMIN");
+    }
+
+    @Transactional(readOnly = true)
+    public Page<TicketResponse> getAdminTicketsPaginated(Integer eventId, String status, int page, int size,
+                                                         String token) {
+        Page<Ticket> tickets = eventId != null
+                ? (status == null ? ticketRepository.findByEventId(eventId, PageRequest.of(page, size))
+                : ticketRepository.findByEventIdAndStatus(eventId, status, PageRequest.of(page, size)))
+                : (status == null ? ticketRepository.findAll(PageRequest.of(page, size))
+                : ticketRepository.findByStatus(status, PageRequest.of(page, size)));
+
+        List<TicketResponse> content = enrichTicketData(tickets, token, "ADMIN");
+        return new org.springframework.data.domain.PageImpl<>(content, tickets.getPageable(),
+                tickets.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    public Page<TicketResponse> getOrganizerTicketsPaginated(Integer organizerId, Integer eventId, String status,
+                                                             int page,
+                                                             int size, String token) {
+        if (!eventClient.checkEventOwnership(organizerId, eventId, token)) {
+            throw new IllegalStateException("Bạn không có quyền truy cập danh sách vé của sự kiện này");
+        }
+        Page<Ticket> tickets = status == null ? ticketRepository.findByEventId(eventId, PageRequest.of(page, size))
+                : ticketRepository.findByEventIdAndStatus(eventId, status, PageRequest.of(page, size));
+
+        List<TicketResponse> content = enrichTicketData(tickets, token, "ORGANIZER");
+        return new org.springframework.data.domain.PageImpl<>(content, tickets.getPageable(),
+                tickets.getTotalElements());
     }
 
     public List<TicketDetail> getTicketsByTransactionId(String transactionId, String token) {
@@ -844,17 +907,21 @@ public class TicketService {
     }
 
     public String generateQRCode(Integer userId, Integer eventId, Integer areaId) {
-        String qrData = userId + ":" + eventId + ":" + areaId + ":" + System.currentTimeMillis();
-        QRCodeWriter qrCodeWriter = new QRCodeWriter();
         try {
-            BitMatrix bitMatrix = qrCodeWriter.encode(qrData, BarcodeFormat.QR_CODE, 200, 200);
-            ByteArrayOutputStream pngOutputStream = new ByteArrayOutputStream();
-            MatrixToImageWriter.writeToStream(bitMatrix, "PNG", pngOutputStream);
-            byte[] qrCodeBytes = pngOutputStream.toByteArray();
-            String fileName = "qr_" + UUID.randomUUID().toString() + ".png";
+            String data = userId + ":" + eventId + ":" + areaId;
+            QRCodeWriter qrCodeWriter = new QRCodeWriter();
+            BitMatrix bitMatrix = qrCodeWriter.encode(data, BarcodeFormat.QR_CODE, 200, 200);
+
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            MatrixToImageWriter.writeToStream(bitMatrix, "PNG", outputStream);
+            byte[] qrCodeBytes = outputStream.toByteArray();
+
+            // Upload to DigitalOcean Spaces
+            String fileName = "qr-" + UUID.randomUUID().toString() + ".png";
             return spacesStorageService.uploadQRCode(qrCodeBytes, fileName);
         } catch (WriterException | IOException e) {
-            throw new RuntimeException("Không thể tạo mã QR: " + e.getMessage());
+            logger.error("Error generating QR code", e);
+            throw new RuntimeException("Could not generate QR code", e);
         }
     }
 
@@ -931,5 +998,48 @@ public class TicketService {
             logger.error("Failed to send ticket confirmation email for transactionId: {}", transactionId, e);
             throw e; // Re-throw để được xử lý ở nơi gọi
         }
+    }
+
+    public TicketStatsDto getAdminTicketStats() {
+        // Get statistics using database aggregation
+        long totalTickets = ticketRepository.count();
+        long soldTickets = ticketRepository.countByStatus("sold");
+        long usedTickets = ticketRepository.countByStatus("used");
+        long cancelledTickets = ticketRepository.countByStatus("cancelled");
+
+        // Calculate revenue
+        Double totalRevenue = ticketRepository.sumPriceForSoldAndUsedTickets();
+
+        return new TicketStatsDto(
+                totalTickets,
+                soldTickets,
+                usedTickets,
+                cancelledTickets,
+                totalRevenue != null ? totalRevenue : 0.0);
+    }
+
+    public TicketStatsDto getOrganizerTicketStats(Integer organizerId, String token) {
+        // Get organizer's event IDs
+        List<Integer> eventIds = eventClient.getOrganizerEventIds(organizerId, token);
+
+        if (eventIds.isEmpty()) {
+            return new TicketStatsDto(0L, 0L, 0L, 0L, 0.0);
+        }
+
+        // Get statistics for organizer's events
+        long totalTickets = ticketRepository.countByEventIdIn(eventIds);
+        long soldTickets = ticketRepository.countByEventIdInAndStatus(eventIds, "sold");
+        long usedTickets = ticketRepository.countByEventIdInAndStatus(eventIds, "used");
+        long cancelledTickets = ticketRepository.countByEventIdInAndStatus(eventIds, "cancelled");
+
+        // Calculate revenue
+        Double totalRevenue = ticketRepository.sumPriceForSoldAndUsedTicketsByEventIds(eventIds);
+
+        return new TicketStatsDto(
+                totalTickets,
+                soldTickets,
+                usedTickets,
+                cancelledTickets,
+                totalRevenue != null ? totalRevenue : 0.0);
     }
 }

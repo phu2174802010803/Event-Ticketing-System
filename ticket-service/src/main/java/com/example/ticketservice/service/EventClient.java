@@ -9,6 +9,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.LinkedHashMap;
 
 @Component
 public class EventClient {
@@ -23,7 +24,8 @@ public class EventClient {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Authorization", "Bearer " + token);
         HttpEntity<String> entity = new HttpEntity<>(headers);
-        ResponseEntity<EventPublicDetailDto> response = restTemplate.exchange(url, HttpMethod.GET, entity, EventPublicDetailDto.class);
+        ResponseEntity<EventPublicDetailDto> response = restTemplate.exchange(url, HttpMethod.GET, entity,
+                EventPublicDetailDto.class);
         return response.getBody();
     }
 
@@ -77,8 +79,8 @@ public class EventClient {
                 url,
                 HttpMethod.GET,
                 entity,
-                new ParameterizedTypeReference<ResponseWrapper<List<AreaResponseDto>>>() {}
-        );
+                new ParameterizedTypeReference<ResponseWrapper<List<AreaResponseDto>>>() {
+                });
         ResponseWrapper<List<AreaResponseDto>> wrapper = response.getBody();
         return wrapper != null && wrapper.getData() != null ? wrapper.getData() : Arrays.asList(new AreaResponseDto[0]);
     }
@@ -119,5 +121,33 @@ public class EventClient {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    public List<Integer> getOrganizerEventIds(Integer organizerId, String token) {
+        String url = eventServiceUrl + "/api/organizer/events";
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + token);
+        HttpEntity<String> entity = new HttpEntity<>(headers);
+
+        try {
+            // The /api/organizer/events endpoint returns List<EventDetailResponseDto>
+            // directly, not wrapped
+            ResponseEntity<LinkedHashMap[]> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    entity,
+                    LinkedHashMap[].class);
+
+            LinkedHashMap[] events = response.getBody();
+            if (events != null) {
+                return Arrays.stream(events)
+                        .map(event -> (Integer) event.get("eventId"))
+                        .toList();
+            }
+        } catch (Exception e) {
+            System.err.println("Error fetching organizer events: " + e.getMessage());
+            e.printStackTrace();
+        }
+        return Arrays.asList();
     }
 }
