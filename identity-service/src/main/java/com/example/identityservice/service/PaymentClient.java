@@ -31,10 +31,68 @@ public class PaymentClient {
         headers.set("Authorization", "Bearer " + token);
         HttpEntity<String> entity = new HttpEntity<>(headers);
 
-        ResponseEntity<ResponseWrapper<List<TransactionDetail>>> response = restTemplate.exchange(
+        ResponseEntity<ResponseWrapper<PageResponse<TransactionDetail>>> response = restTemplate.exchange(
                 url, HttpMethod.GET, entity,
-                new ParameterizedTypeReference<ResponseWrapper<List<TransactionDetail>>>() {
+                new ParameterizedTypeReference<ResponseWrapper<PageResponse<TransactionDetail>>>() {
                 });
-        return response.getBody();
+
+        ResponseWrapper<PageResponse<TransactionDetail>> wrapper = response.getBody();
+        if (wrapper != null && wrapper.getData() != null) {
+            // Extract the content from Page and wrap it in a new ResponseWrapper
+            List<TransactionDetail> transactions = wrapper.getData().getContent();
+            return new ResponseWrapper<>(wrapper.getStatus(), wrapper.getMessage(), transactions);
+        }
+
+        return new ResponseWrapper<>("error", "No data received", null);
+    }
+
+    // Inner class to handle Page response structure
+    public static class PageResponse<T> {
+        private List<T> content;
+        private int totalPages;
+        private long totalElements;
+        private int size;
+        private int number;
+
+        // Getters and setters
+        public List<T> getContent() {
+            return content;
+        }
+
+        public void setContent(List<T> content) {
+            this.content = content;
+        }
+
+        public int getTotalPages() {
+            return totalPages;
+        }
+
+        public void setTotalPages(int totalPages) {
+            this.totalPages = totalPages;
+        }
+
+        public long getTotalElements() {
+            return totalElements;
+        }
+
+        public void setTotalElements(long totalElements) {
+            this.totalElements = totalElements;
+        }
+
+        public int getSize() {
+            return size;
+        }
+
+        public void setSize(int size) {
+            this.size = size;
+        }
+
+        public int getNumber() {
+            return number;
+        }
+
+        public void setNumber(int number) {
+            this.number = number;
+        }
     }
 }
