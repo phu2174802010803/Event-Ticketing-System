@@ -1,0 +1,95 @@
+package com.example.gatewayapp.config;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.gateway.filter.GatewayFilter;
+import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.concurrent.TimeUnit;
+
+@Component
+public class AuthFilter extends AbstractGatewayFilterFactory<AuthFilter.Config> {
+
+    @Autowired
+    private RestTemplate restTemplate;
+
+    @Autowired
+    private RedisTemplate<String, String> redisTemplate;
+
+    @Value("${identity.service.url}")
+    private String identityServiceUrl;
+
+    public AuthFilter() {
+        super(Config.class);
+    }
+
+    @Override
+    public GatewayFilter apply(Config config) {
+        return (exchange, chain) -> {
+            String path = exchange.getRequest().getURI().getPath();
+            // Bỏ qua xác thực cho các route WebSocket
+            if (path.startsWith("/ws") || path.startsWith("/ws-native")) {
+                return chain.filter(exchange);
+            }
+            if (path.startsWith("/api/events/public") ||
+                    path.startsWith("/api/register") ||
+                    path.startsWith("/api/auth/login") ||
+                    path.startsWith("/api/auth/logout") ||
+                    path.startsWith("/api/auth/forgot-password") ||
+                    path.startsWith("/api/auth/verify-code") ||
+                    path.startsWith("/api/auth/reset-password")) {
+                return chain.filter(exchange); // Bỏ qua xác thực
+            }
+
+            if (!exchange.getRequest().getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
+                exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                return exchange.getResponse().setComplete();
+            }
+
+            String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                String token = authHeader.substring(7);
+                // Kiểm tra blacklist trong Redis
+                if (redisTemplate.hasKey("blacklist:" + token)) {
+                    exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                    return exchange.getResponse().setComplete();
+                }
+                // Kiểm tra cache Redis
+                String userInfo = redisTemplate.opsForValue().get("token:" + token);
+                if (userInfo == null) {
+                    // Gọi identity-service để validate
+                    String validateUrl = identityServiceUrl + "/api/auth/validate?token=" + token;
+                    String response = restTemplate.getForObject(validateUrl, String.class);
+                    if (response == null) {
+                        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                        return exchange.getResponse().setComplete();
+                    }
+                    userInfo = response; // "user_id:role", ví dụ "1:USER"
+                    // Lưu vào Redis với TTL 10 phút
+                    redisTemplate.opsForValue().set("token:" + token, userInfo, 10, TimeUnit.MINUTES);
+                }
+                // Thêm header X-User-Id và X-User-Role
+                String[] parts = userInfo.split(":");
+                String userId = parts[0];
+                String role = parts[1];
+                exchange.getRequest().mutate()
+                        .header("X-User-Id", userId)
+                        .header("X-User-Role", role)
+                        .build();
+            } else {
+                exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                return exchange.getResponse().setComplete();
+            }
+
+            return chain.filter(exchange);
+        };
+    }
+
+    public static class Config {
+    }
+}

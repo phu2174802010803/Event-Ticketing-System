@@ -1,0 +1,17 @@
+product,group_description,description,hours,start,end,USD,project_name,category
+Droplets,,redis-droplet (s-1vcpu-1gb),432,2025-06-01 00:00:00 +0000,2025-06-19 00:00:00 +0000,$3.86,Event Ticketing System,iaas
+Droplets,,kafka-droplet (s-1vcpu-2gb),432,2025-06-01 00:00:00 +0000,2025-06-19 00:00:00 +0000,$7.71,Event Ticketing System,iaas
+Kubernetes Clusters,event-tickets-cluster,3 nodes - 4 GB / 2 vCPU / 80 GB SSD,432,2025-06-01 00:00:00 +0000,2025-06-19 00:00:00 +0000,$28.94,Event Ticketing System,iaas
+Kubernetes Clusters,event-tickets-cluster,a18c0fbe194f74eaab15bf6d9be88ce7 (sgp1) (small) (nodes: 1) Public Load Balancer,432,2025-06-01 00:00:00 +0000,2025-06-19 00:00:00 +0000,$7.71,Event Ticketing System,iaas
+Kubernetes Clusters,event-tickets-cluster,a6984701be040449aa65338e1ef79a0d (sgp1) (small) (nodes: 1) Public Load Balancer,432,2025-06-01 00:00:00 +0000,2025-06-19 00:00:00 +0000,$7.71,Event Ticketing System,iaas
+Kubernetes Clusters,event-tickets-cluster,a9748677553a94cd6bb0b7bee1c40efa (sgp1) (small) (nodes: 1) Public Load Balancer,261,2025-06-08 03:06:25 +0000,2025-06-19 00:00:00 +0000,$4.66,Event Ticketing System,iaas
+Kubernetes Clusters,event-tickets-cluster,a52c82aea0c43482e8fff5938cd41ee4 (sgp1) (small) (nodes: 1) Public Load Balancer,432,2025-06-01 00:00:00 +0000,2025-06-19 00:00:00 +0000,$7.71,Event Ticketing System,iaas
+Droplet Snapshots,,kafka-ver1.0 (sgp1) 3.06GB Droplet Snapshot,432,2025-06-01 00:00:00 +0000,2025-06-19 00:00:00 +0000,$0.12,,iaas
+Droplet Snapshots,,redis-droplet-1748089255346 (sgp1) 2.19GB Droplet Snapshot,432,2025-06-01 00:00:00 +0000,2025-06-19 00:00:00 +0000,$0.08,,iaas
+Droplet Snapshots,,worker-pool-tbcir-1748145629070 (sgp1) 17.80GB Droplet Snapshot,432,2025-06-01 00:00:00 +0000,2025-06-19 00:00:00 +0000,$0.69,,iaas
+Droplet Snapshots,,worker-pool-tbczo-1748145687006 (sgp1) 16.71GB Droplet Snapshot,432,2025-06-01 00:00:00 +0000,2025-06-19 00:00:00 +0000,$0.64,,iaas
+Spaces Subscription,,Spaces ($5/mo 250GiB storage & 1TiB bandwidth),432,2025-06-01 00:00:00 +0000,2025-06-19 00:00:00 +0000,$3.21,,iaas
+Spaces Bandwidth,event-images-system,Spaces Bandwidth Allowance - cdn (48.56GiB @ $0/GiB),,2025-06-01 00:00:00 +0000,2025-06-19 00:00:00 +0000,$0.00,Event Ticketing System,iaas
+Spaces Bandwidth,event-images-system,Spaces Bandwidth Allowance - direct (0.17GiB @ $0/GiB),,2025-06-01 00:00:00 +0000,2025-06-19 00:00:00 +0000,$0.00,Event Ticketing System,iaas
+Container Registry Subscription,,Container Registry (professional),432,2025-06-01 00:00:00 +0000,2025-06-19 00:00:00 +0000,$12.86,,iaas
+Credits,,GitHub Student Pack,,2025-06-01 00:00:00 +0000,2025-06-30 23:59:59 +0000,-$85.90,,iaas

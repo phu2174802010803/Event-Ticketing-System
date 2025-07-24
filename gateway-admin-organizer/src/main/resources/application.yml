@@ -1,0 +1,70 @@
+spring:
+  application:
+    name: gateway-admin-organizer
+  data:
+    redis:
+      host: 68.183.179.182
+      port: 6379
+      password: 9999
+  cloud:
+    gateway:
+      routes:
+        - id: identity-service-organizer
+          uri: http://identity-service-service
+          predicates:
+            - Path=/api/auth/**, /api/organizer/register, /api/organizer/profile/**
+        - id: identity-service-admin
+          uri: http://identity-service-service
+          predicates:
+            - Path=/api/auth/**, /api/admin/users/**
+        - id: event-service-organizer
+          uri: http://event-service-service
+          predicates:
+            - Path=/api/organizer/events/**, /api/organizer/phases/**, /api/organizer/areas/**, /api/organizer/categories/**, /api/organizer/map-templates/**
+        - id: event-service-admin
+          uri: http://event-service-service
+          predicates:
+            - Path=/api/admin/events/**, /api/admin/phases/**, /api/admin/areas/**, /api/admin/categories/**, /api/admin/map-templates/**
+        - id: ticket-service-organizer
+          uri: http://ticket-service-service
+          predicates:
+            - Path=/api/organizer/tickets/**, /api/organizer/tickets/events/**
+        - id: ticket-service-admin
+          uri: http://ticket-service-service
+          predicates:
+            - Path=/api/admin/tickets/**, /api/admin/tickets/events/**
+        - id: payment-service-organizer
+          uri: http://payment-service-service
+          predicates:
+            - Path=/api/organizer/transactions/**
+        - id: payment-service-admin
+          uri: http://payment-service-service
+          predicates:
+            - Path=/api/admin/transactions/**, /api/admin/reports/**
+      default-filters:
+        - AuthFilter
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "https://www.tickvivo.me/"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+            allowedHeaders:
+              - "*"
+            allowCredentials: true
+            maxAge: 3600
+server:
+  port: 8085
+  http2:
+    enabled: true
+identity:
+  service:
+    url: http://identity-service-service
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    com.example.gatewayadminorganizer: DEBUG

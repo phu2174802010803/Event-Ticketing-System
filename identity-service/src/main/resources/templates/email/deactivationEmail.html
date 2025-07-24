@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thông báo vô hiệu hóa tài khoản - Tickvivo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            padding: 20px;
+            margin: 0;
+            line-height: 1.6;
+        }
+
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="white" opacity="0.1"/></pattern></defs><rect width="100%" height="100%" fill="url(%23grain)"/></svg>');
+            opacity: 0.1;
+        }
+
+        .logo {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            z-index: 1;
+            position: relative;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+            z-index: 1;
+            position: relative;
+        }
+
+        .header p {
+            margin: 15px 0 0 0;
+            font-size: 16px;
+            opacity: 0.9;
+            z-index: 1;
+            position: relative;
+        }
+
+        .content {
+            padding: 40px 30px;
+        }
+
+        .greeting {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 30px;
+        }
+
+        .message {
+            background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border-left: 5px solid #dc3545;
+            color: #721c24;
+            line-height: 1.8;
+        }
+
+        .warning-section {
+            background: white;
+            border: 3px solid #dc3545;
+            border-radius: 16px;
+            padding: 30px;
+            text-align: center;
+            margin: 30px 0;
+            box-shadow: 0 4px 20px rgba(220, 53, 69, 0.1);
+        }
+
+        .warning-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .warning-title {
+            font-size: 20px;
+            color: #dc3545;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        .reason-section {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border: 2px solid #ffeaa7;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 25px 0;
+            color: #856404;
+        }
+
+        .reason-section h3 {
+            color: #d69e2e;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .reason-section ul {
+            margin-left: 20px;
+            line-height: 1.8;
+        }
+
+        .contact-section {
+            background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+            border: 2px solid #bee5eb;
+            border-radius: 12px;
+            padding: 25px;
+            margin-top: 25px;
+            color: #0c5460;
+        }
+
+        .contact-section h3 {
+            color: #17a2b8;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .footer {
+            background: #f8f9fa;
+            padding: 40px 30px;
+            text-align: center;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .footer .logo-footer {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+
+        .footer p {
+            margin: 8px 0;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .footer .contact-info {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+
+            .email-container {
+                margin: 0;
+                border-radius: 8px;
+            }
+
+            .header,
+            .content,
+            .footer {
+                padding: 20px;
+            }
+
+            .warning-icon {
+                font-size: 36px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+<div class="email-container">
+    <div class="header">
+        <div class="logo">⚠️ Tickvivo</div>
+        <h1>Thông báo quan trọng</h1>
+        <p>Tình trạng tài khoản của bạn đã thay đổi</p>
+    </div>
+
+    <div class="content">
+        <div class="greeting">
+            <p>Xin chào,</p>
+        </div>
+
+        <div class="message">
+            <p><strong>Chúng tôi xin thông báo rằng tài khoản Tickvivo của bạn đã bị vô hiệu hóa.</strong></p>
+            <p>Quyết định này được thực hiện bởi đội ngũ quản trị viên của chúng tôi sau khi xem xét kỹ lưỡng.</p>
+        </div>
+
+        <div class="warning-section">
+            <div class="warning-icon">🚫</div>
+            <div class="warning-title">TÀI KHOẢN ĐÃ BỊ VÔ HIỆU HÓA</div>
+            <p>Bạn sẽ không thể đăng nhập và sử dụng các dịch vụ của Tickvivo cho đến khi tài khoản được kích hoạt
+                lại.</p>
+        </div>
+
+        <div class="reason-section">
+            <h3>🔍 Lý do có thể dẫn đến việc vô hiệu hóa:</h3>
+            <ul>
+                <li>Vi phạm điều khoản sử dụng dịch vụ</li>
+                <li>Hoạt động đáng ngờ trên tài khoản</li>
+                <li>Sử dụng thông tin giả mạo</li>
+                <li>Hành vi gian lận trong giao dịch</li>
+                <li>Báo cáo từ người dùng khác</li>
+            </ul>
+        </div>
+
+        <div class="contact-section">
+            <h3>📞 Cần hỗ trợ? Liên hệ với chúng tôi</h3>
+            <p>Nếu bạn cho rằng đây là một sự nhầm lẫn hoặc muốn khiếu nại quyết định này, vui lòng liên hệ với đội
+                ngũ hỗ trợ khách hàng của chúng tôi.</p>
+            <p><strong>Chúng tôi sẽ xem xét và phản hồi trong vòng 24-48 giờ.</strong></p>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div class="logo-footer">🎫 Tickvivo</div>
+        <p><strong>Hệ thống bán vé sự kiện hàng đầu Việt Nam</strong></p>
+        <div class="contact-info">
+            <p>📧 Email hỗ trợ: support@tickvivo.com</p>
+            <p>📞 Hotline: 1900-8888-99 (24/7)</p>
+            <p>🌐 Website: www.tickvivo.com</p>
+            <p style="margin-top: 15px; font-size: 12px; color: #999;">
+                © 2025 Tickvivo. Tất cả quyền được bảo lưu.
+            </p>
+        </div>
+    </div>
+</div>
+</body>
+
+</html>

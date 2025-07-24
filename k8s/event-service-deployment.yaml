@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: event-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: event-service
+  template:
+    metadata:
+      labels:
+        app: event-service
+    spec:
+      containers:
+        - name: event-service
+          image: registry.digitalocean.com/event-tickets-registry/event-service:latest
+          ports:
+            - containerPort: 8083
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://my-pg-flex-server.postgres.database.azure.com:5432/event_db?sslmode=require"
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "pgadmin"
+            - name: SPRING_DATASOURCE_PASSWORD
+              value: "Demo@123"
+            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+              value: "update"
+            - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+              value: "146.190.95.235:9092"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: event-service-service
+spec:
+  ports:
+    - port: 80
+      targetPort: 8083
+  selector:
+    app: event-service
+  type: ClusterIP

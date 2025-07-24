@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ticket-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ticket-service
+  template:
+    metadata:
+      labels:
+        app: ticket-service
+    spec:
+      containers:
+        - name: ticket-service
+          image: registry.digitalocean.com/event-tickets-registry/ticket-service:latest
+          ports:
+            - containerPort: 8084
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          env:
+            # Database Configuration
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://my-pg-flex-server.postgres.database.azure.com:5432/ticket_db?sslmode=require"
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "pgadmin"
+            - name: SPRING_DATASOURCE_PASSWORD
+              value: "Demo@123"
+            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+              value: "update"
+            # Redis Configuration
+            - name: SPRING_DATA_REDIS_HOST
+              value: "68.183.179.182"
+            - name: SPRING_DATA_REDIS_PORT
+              value: "6379"
+            - name: SPRING_DATA_REDIS_PASSWORD
+              value: "9999"
+            # Kafka Configuration
+            - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+              value: "146.190.95.235:9092"
+            # Service URLs
+            - name: IDENTITY_SERVICE_URL
+              value: "http://identity-service-service"
+            - name: EVENT_SERVICE_URL
+              value: "http://event-service-service"
+            - name: PAYMENT_SERVICE_URL
+              value: "http://payment-service-service"
+            # SendGrid API Configuration (HTTPS API - không dùng SMTP)
+            - name: SENDGRID_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: email-config-secret
+                  key: sendgrid-api-key
+            - name: SENDGRID_FROM_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: email-config-secret
+                  key: sendgrid-from-email
+            - name: SENDGRID_FROM_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: email-config-secret
+                  key: sendgrid-from-name
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ticket-service-service
+spec:
+  ports:
+    - port: 80
+      targetPort: 8084
+  selector:
+    app: ticket-service
+  type: ClusterIP

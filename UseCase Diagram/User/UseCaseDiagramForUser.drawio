@@ -1,0 +1,58 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36" version="27.1.6">
+  <diagram name="Trang-1" id="qgHg_898XdBZMUf3hTDz">
+    <mxGraphModel dx="1426" dy="777" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="4681" pageHeight="3300" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="fw19V2OSGsTP08ke994j-2" value="" style="rounded=1;whiteSpace=wrap;html=1;strokeWidth=2;fontSize=20;" parent="1" vertex="1">
+          <mxGeometry x="580" y="100" width="230" height="540" as="geometry" />
+        </mxCell>
+        <mxCell id="XffBjFfFlsopvNtukgpj-1" value="&lt;b&gt;User&lt;/b&gt;" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontSize=20;" parent="1" vertex="1">
+          <mxGeometry x="410" y="340" width="40" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="XffBjFfFlsopvNtukgpj-2" value="Quản lý xác thực" style="ellipse;whiteSpace=wrap;html=1;fontSize=20;" parent="1" vertex="1">
+          <mxGeometry x="640" y="170" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="XffBjFfFlsopvNtukgpj-3" value="Quản lý sự kiện" style="ellipse;whiteSpace=wrap;html=1;fontSize=20;" parent="1" vertex="1">
+          <mxGeometry x="640" y="280" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="XffBjFfFlsopvNtukgpj-4" value="Quản lý vé" style="ellipse;whiteSpace=wrap;html=1;fontSize=20;" parent="1" vertex="1">
+          <mxGeometry x="640" y="400" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="XffBjFfFlsopvNtukgpj-5" value="Quản lý hồ sơ" style="ellipse;whiteSpace=wrap;html=1;fontSize=20;" parent="1" vertex="1">
+          <mxGeometry x="640" y="520" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="XffBjFfFlsopvNtukgpj-7" value="" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=20;" parent="1" target="XffBjFfFlsopvNtukgpj-2" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="460" y="390" as="sourcePoint" />
+            <mxPoint x="750" y="380" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="XffBjFfFlsopvNtukgpj-8" value="" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=20;" parent="1" target="XffBjFfFlsopvNtukgpj-3" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="460" y="400" as="sourcePoint" />
+            <mxPoint x="750" y="380" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="XffBjFfFlsopvNtukgpj-9" value="" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=20;" parent="1" target="XffBjFfFlsopvNtukgpj-4" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="460" y="410" as="sourcePoint" />
+            <mxPoint x="750" y="380" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="XffBjFfFlsopvNtukgpj-10" value="" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=20;" parent="1" target="XffBjFfFlsopvNtukgpj-5" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="460" y="420" as="sourcePoint" />
+            <mxPoint x="750" y="380" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fw19V2OSGsTP08ke994j-1" value="&lt;b&gt;Hệ thống bán vé sự kiện&lt;/b&gt;" style="shape=umlFrame;whiteSpace=wrap;html=1;pointerEvents=0;width=270;height=30;strokeWidth=3;fontSize=20;" parent="1" vertex="1">
+          <mxGeometry x="310" y="50" width="530" height="630" as="geometry" />
+        </mxCell>
+        <mxCell id="fw19V2OSGsTP08ke994j-3" value="&lt;b&gt;Tickvivo&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;" parent="1" vertex="1">
+          <mxGeometry x="670" y="100" width="60" height="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

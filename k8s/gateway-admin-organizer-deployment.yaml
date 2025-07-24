@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway-admin-organizer
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gateway-admin-organizer
+  template:
+    metadata:
+      labels:
+        app: gateway-admin-organizer
+    spec:
+      containers:
+        - name: gateway-admin-organizer
+          image: registry.digitalocean.com/event-tickets-registry/gateway-admin-organizer:latest
+          ports:
+            - containerPort: 8085
+          env:
+            - name: SPRING_DATA_REDIS_HOST
+              value: "68.183.179.182"
+            - name: SPRING_DATA_REDIS_PORT
+              value: "6379"
+            - name: SPRING_DATA_REDIS_PASSWORD
+              value: "9999"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-admin-organizer-service
+spec:
+  ports:
+    - port: 80
+      targetPort: 8085
+  selector:
+    app: gateway-admin-organizer
+  type: ClusterIP

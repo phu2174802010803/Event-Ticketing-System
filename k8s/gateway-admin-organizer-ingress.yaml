@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gateway-admin-organizer-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"  # Tự động chuyển HTTP sang HTTPS
+spec:
+  ingressClassName: nginx  # Thay thế annotation bằng thuộc tính này
+  tls:
+    - hosts:
+        - ticketvivohub.me
+      secretName: ticketvivohub-tls
+  rules:
+    - host: ticketvivohub.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway-admin-organizer-service
+                port:
+                  number: 80

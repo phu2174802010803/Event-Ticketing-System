@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Xác nhận vé sự kiện - Tickvivo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 20px;
+      margin: 0;
+      line-height: 1.6;
+    }
+
+    .email-container {
+      max-width: 700px;
+      margin: 0 auto;
+      background-color: white;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 40px 30px;
+      text-align: center;
+      position: relative;
+    }
+
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="white" opacity="0.1"/></pattern></defs><rect width="100%" height="100%" fill="url(%23grain)"/></svg>');
+      opacity: 0.1;
+    }
+
+    .logo {
+      font-size: 32px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      z-index: 1;
+      position: relative;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 600;
+      z-index: 1;
+      position: relative;
+    }
+
+    .header p {
+      margin: 15px 0 0 0;
+      font-size: 16px;
+      opacity: 0.9;
+      z-index: 1;
+      position: relative;
+    }
+
+    .content {
+      padding: 40px 30px;
+    }
+
+    .greeting {
+      font-size: 18px;
+      color: #333;
+      margin-bottom: 30px;
+    }
+
+    .event-info {
+      background: linear-gradient(135deg, #f8f9ff 0%, #e3f2fd 100%);
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 30px;
+      border-left: 5px solid #667eea;
+    }
+
+    .event-info h2 {
+      color: #333;
+      margin: 0 0 20px 0;
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .event-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .detail-item {
+      display: flex;
+      align-items: center;
+      font-size: 16px;
+      color: #555;
+    }
+
+    .detail-icon {
+      font-size: 20px;
+      margin-right: 12px;
+      color: #667eea;
+    }
+
+    .tickets-section h3 {
+      color: #333;
+      margin-bottom: 25px;
+      font-size: 22px;
+      border-bottom: 3px solid #667eea;
+      padding-bottom: 10px;
+      display: flex;
+      align-items: center;
+    }
+
+    .tickets-section h3::before {
+      content: '🎫';
+      margin-right: 10px;
+    }
+
+    .ticket-item {
+      background: white;
+      border: 2px solid #e1e8f7;
+      border-radius: 16px;
+      padding: 25px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 20px rgba(102, 126, 234, 0.08);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .ticket-item::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 5px;
+      height: 100%;
+      background: linear-gradient(to bottom, #667eea, #764ba2);
+    }
+
+    .ticket-item:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 30px rgba(102, 126, 234, 0.15);
+    }
+
+    .ticket-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+
+    .ticket-code {
+      font-family: 'Courier New', monospace;
+      font-size: 18px;
+      font-weight: bold;
+      color: #667eea;
+      background: linear-gradient(135deg, #f8f9ff 0%, #e3f2fd 100%);
+      padding: 10px 16px;
+      border-radius: 8px;
+      letter-spacing: 1px;
+      border: 1px solid #e1e8f7;
+    }
+
+    .ticket-price {
+      font-size: 20px;
+      font-weight: bold;
+      color: #28a745;
+      background: #f0fff4;
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid #c3e6cb;
+    }
+
+    .ticket-body {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 30px;
+      align-items: center;
+    }
+
+    .ticket-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      font-size: 15px;
+      color: #666;
+    }
+
+    .ticket-detail-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .ticket-detail-label {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 4px;
+    }
+
+    .qr-code-container {
+      text-align: center;
+      padding: 15px;
+      background: #fafafa;
+      border-radius: 12px;
+      border: 2px dashed #ccc;
+    }
+
+    .qr-code {
+      width: 120px;
+      height: 120px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .qr-label {
+      font-size: 12px;
+      color: #666;
+      margin-top: 8px;
+      font-weight: 500;
+    }
+
+    .summary {
+      background: linear-gradient(135deg, #f8f9ff 0%, #e3f2fd 100%);
+      border-radius: 16px;
+      padding: 30px;
+      margin-top: 30px;
+      text-align: center;
+      border: 2px solid #e1e8f7;
+    }
+
+    .summary h3 {
+      color: #333;
+      margin-bottom: 20px;
+      font-size: 20px;
+    }
+
+    .total-amount {
+      font-size: 28px;
+      font-weight: bold;
+      color: #28a745;
+      margin: 15px 0;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    .transaction-id {
+      font-family: 'Courier New', monospace;
+      color: #666;
+      font-size: 14px;
+      margin-top: 15px;
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #e1e8f7;
+      display: inline-block;
+    }
+
+    .important-notice {
+      background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+      border: 2px solid #ffeaa7;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 25px;
+      color: #856404;
+    }
+
+    .important-notice strong {
+      color: #d69e2e;
+    }
+
+    .footer {
+      background: #f8f9fa;
+      padding: 40px 30px;
+      text-align: center;
+      border-top: 1px solid #e9ecef;
+    }
+
+    .footer .logo-footer {
+      font-size: 24px;
+      font-weight: bold;
+      color: #667eea;
+      margin-bottom: 15px;
+    }
+
+    .footer p {
+      margin: 8px 0;
+      color: #666;
+      font-size: 14px;
+    }
+
+    .footer .contact-info {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #e9ecef;
+    }
+
+    /* Vietnamese currency formatting */
+    .vnd-price::after {
+      content: ' VNĐ';
+      font-weight: normal;
+      color: #28a745;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
+
+      .email-container {
+        margin: 0;
+        border-radius: 8px;
+      }
+
+      .header,
+      .content,
+      .footer {
+        padding: 20px;
+      }
+
+      .event-details {
+        grid-template-columns: 1fr;
+      }
+
+      .ticket-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .ticket-body {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+
+      .ticket-details {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+<div class="email-container">
+  <div class="header">
+    <div class="logo">🎫 Tickvivo</div>
+    <h1>🎉 Đặt vé thành công!</h1>
+    <p>Chúc mừng bạn đã đặt vé thành công! Cảm ơn bạn đã tin tưởng Tickvivo</p>
+  </div>
+
+  <div class="content">
+    <div class="greeting">
+      <p>Kính chào anh/chị <strong th:text="${userName}">Khách hàng</strong>,</p>
+      <p>Tickvivo xin trân trọng thông báo vé của bạn đã được xác nhận thành công!</p>
+    </div>
+
+    <div class="event-info">
+      <h2 th:text="${eventName}">Tên sự kiện</h2>
+      <div class="event-details">
+        <div class="detail-item">
+          <span class="detail-icon">📍</span>
+          <strong>Địa điểm:</strong>&nbsp;<span th:text="${eventLocation}">Địa điểm</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-icon">📅</span>
+          <strong>Thời gian:</strong>&nbsp;<span th:text="${eventDateTime}">Thời gian</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tickets-section">
+      <h3>Chi tiết vé của bạn</h3>
+      <div th:each="ticket, ticketStat : ${tickets}" class="ticket-item">
+        <div class="ticket-header">
+          <div class="ticket-code">Vé số #<span th:text="${ticketStat.index + 1}">1</span></div>
+          <div class="ticket-price">
+            <span th:text="${#numbers.formatDecimal(ticket.price, 0, 'COMMA', 0, 'POINT')}">500000</span> VNĐ
+          </div>
+        </div>
+        <div class="ticket-body">
+          <div class="ticket-details">
+            <div class="ticket-detail-item">
+              <div class="ticket-detail-label">🎯 Khu vực:</div>
+              <div th:text="${ticket.areaName}">Khu vực</div>
+            </div>
+            <div class="ticket-detail-item">
+              <div class="ticket-detail-label">🕒 Ngày đặt:</div>
+              <div th:text="${ticket.purchaseDate}">Ngày mua</div>
+            </div>
+          </div>
+          <div class="qr-code-container" th:if="${ticket.ticketCode}">
+            <img th:src="${ticket.ticketCode}" alt="Mã QR vé" class="qr-code"
+                 onerror="this.style.display='none'; this.nextElementSibling.innerHTML='QR Code tạm thời không khả dụng';" />
+            <div class="qr-label">Quét mã QR tại cổng vào</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="important-notice">
+      <strong>📋 Hướng dẫn sử dụng vé:</strong><br>
+      • Vui lòng mang theo CCCD/CMND và email xác nhận này khi tham dự sự kiện<br>
+      • Xuất trình mã QR tại cổng kiểm tra để được vào cửa<br>
+      • Mỗi vé chỉ được sử dụng một lần và không thể chuyển nhượng<br>
+      • Đến sớm 30 phút để tránh ùn tắc tại cổng vào<br>
+      • Liên hệ hotline <strong>1900-8888-99</strong> nếu cần hỗ trợ
+    </div>
+
+    <div class="summary">
+      <h3>💰 Chi tiết thanh toán</h3>
+      <div class="total-amount">
+        <span th:text="${#numbers.formatDecimal(totalAmount, 0, 'COMMA', 0, 'POINT')}">1500000</span> VNĐ
+      </div>
+      <p style="color: #666; margin-top: 5px;">Đã bao gồm VAT và phí dịch vụ</p>
+      <div class="transaction-id">
+        Mã giao dịch: <span th:text="${transactionId}">Transaction ID</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="logo-footer">🎫 Tickvivo</div>
+    <p><strong>Nền tảng bán vé sự kiện hàng đầu Việt Nam</strong></p>
+    <div class="contact-info">
+      <p>📧 Email hỗ trợ: support@tickvivo.vn</p>
+      <p>📞 Hotline: 1900-8888-99 (24/7)</p>
+      <p>💬 Zalo: 0901-234-567</p>
+      <p>🌐 Website: www.tickvivo.vn</p>
+      <p>📍 Địa chỉ: 123 Nguyễn Huệ, Quận 1, TP.HCM</p>
+      <p style="margin-top: 20px; font-size: 12px; color: #999;">
+        © 2025 Tickvivo. Bản quyền thuộc về Nhóm 14 Tickvivo .
+      </p>
+      <p style="font-size: 11px; color: #999; margin-top: 10px;">
+        Giấy phép kinh doanh số: 0123456789 do Sở KH&ĐT TP.HCM cấp ngày 01/01/2025
+      </p>
+    </div>
+  </div>
+</div>
+</body>
+
+</html>

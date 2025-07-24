@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gateway-app
+  template:
+    metadata:
+      labels:
+        app: gateway-app
+    spec:
+      containers:
+        - name: gateway-app
+          image: registry.digitalocean.com/event-tickets-registry/gateway-app:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_DATA_REDIS_HOST
+              value: "68.183.179.182"
+            - name: SPRING_DATA_REDIS_PORT
+              value: "6379"
+            - name: SPRING_DATA_REDIS_PASSWORD
+              value: "9999"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-app-service
+spec:
+  ports:
+    - port: 80
+      targetPort: 8080
+  selector:
+    app: gateway-app
+  type: ClusterIP
